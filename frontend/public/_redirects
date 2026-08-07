@@ -1,0 +1,5 @@
+# 1) Las llamadas a la API van a la función serverless
+/api/*    /.netlify/functions/api/:splat    200
+
+# 2) El resto es la SPA de React
+/*        /index.html                       200

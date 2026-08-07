@@ -1,0 +1,28 @@
+# Configuración de Netlify para Bella Napoli
+# Frontend (React) + API (función serverless) en un solo sitio, todo gratis.
+
+[build]
+  # Instala deps de las funciones (raíz) y compila el frontend
+  command = "npm install && cd frontend && npm install && npm run build"
+  publish = "frontend/dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+  # El frontend llama a la API en el mismo dominio
+  VITE_API_URL = "/api"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# 1) Las llamadas /api/* van a la función serverless (la API Express)
+[[redirects]]
+  from   = "/api/*"
+  to     = "/.netlify/functions/api/:splat"
+  status = 200
+
+# 2) El resto se sirve como SPA
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
+  status = 200
