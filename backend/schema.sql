@@ -55,13 +55,14 @@ CREATE TABLE IF NOT EXISTS site_settings (
 );
 
 -- ─── Datos iniciales (semilla) ─────────────────────────
-INSERT INTO categories (id, name, color, position) VALUES
+-- INSERT IGNORE: solo inserta lo que falta. NUNCA pisa lo que ya editaste
+-- desde el panel, aunque vuelvas a correr init-db.
+INSERT IGNORE INTO categories (id, name, color, position) VALUES
   ('clasicas',     'Clásicas',      '#D98324', 1),
   ('especiales',   'Especiales',    '#C0392B', 2),
   ('vegetarianas', 'Vegetarianas',  '#6F9A3E', 3),
   ('empanadas',    'Empanadas',     '#E0A93E', 4),
-  ('bebidas',      'Bebidas',       '#5AAE8A', 5)
-ON DUPLICATE KEY UPDATE name = VALUES(name);
+  ('bebidas',      'Bebidas',       '#5AAE8A', 5);
 
 INSERT INTO items (name, description, price, category_id, subcategory, sizes, size_prices, badge, badge_label, visible, position) VALUES
   ('Muzzarella', 'Salsa de tomate, muzzarella y aceitunas', '11.000', 'clasicas', '', 'Chica, Mediana, Grande', '[{"name":"Chica","price":"8.000"},{"name":"Mediana","price":"11.000"},{"name":"Grande","price":"13.000"}]', '', '', 1, 1),
@@ -77,7 +78,7 @@ INSERT INTO items (name, description, price, category_id, subcategory, sizes, si
   ('Gaseosa 1.5L', 'Línea Coca-Cola, bien fría', '2.500', 'bebidas', '', '', NULL, '', '', 1, 11)
 ;
 
-INSERT INTO site_settings (setting_key, setting_value) VALUES
+INSERT IGNORE INTO site_settings (setting_key, setting_value) VALUES
   ('nombre',      'Bella Napoli'),
   ('eslogan',     'Pizza a la piedra, hecha como en casa.'),
   ('subtitulo',   'Pizzas artesanales, empanadas y más - Delivery y take away'),
@@ -89,5 +90,4 @@ INSERT INTO site_settings (setting_key, setting_value) VALUES
   ('instagram',   '@bellanapoli'),
   ('envio',        ''),
   ('horaApertura', '18:00'),
-  ('horaCierre',   '22:00')
-ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value);
+  ('horaCierre',   '22:00');

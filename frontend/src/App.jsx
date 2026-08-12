@@ -98,6 +98,26 @@ function horarioTxt(site) {
   return `${site?.horaApertura || "18:00"} a ${site?.horaCierre || "22:00"}`;
 }
 
+// Enlaces de contacto
+function limpiarInsta(v) {
+  return String(v || "").trim()
+    .replace(/^https?:\/\/(www\.)?instagram\.com\//i, "")
+    .replace(/^@/, "")
+    .replace(/\/.*$/, "");
+}
+function igUrl(v) {
+  const h = limpiarInsta(v);
+  return h ? `https://instagram.com/${h}` : "";
+}
+function telUrl(v) {
+  const t = String(v || "").replace(/[^\d+]/g, "");
+  return t ? `tel:${t}` : "";
+}
+function waUrl(v) {
+  const t = String(v || "").replace(/[^\d]/g, "");
+  return t ? `https://wa.me/${t}` : "";
+}
+
 // Resumen de precio para la tabla del admin: rango si hay precios por tamaño
 function precioResumen(it) {
   const sp = (Array.isArray(it.sizePrices) ? it.sizePrices : []).filter((s) => s && s.name);
@@ -343,8 +363,9 @@ function SitioPublico({ onAdmin }) {
             <p style={{ color: "rgba(252,247,240,.6)", fontSize: 13, lineHeight: 1.6, margin: 0 }}>{site.subtitulo}</p>
           </div>
           <FootItem icon={<MapPin size={16} />} label="Direccion" val={site.direccion} />
+          <FootItem icon={<Phone size={16} />} label="Telefono" val={site.telefono} href={telUrl(site.telefono)} />
+          <FootItem icon={<Instagram size={16} />} label="Seguinos" val={site.instagram} href={igUrl(site.instagram)} externo />
           <FootItem icon={<Clock size={16} />} label="Horario" val={site.horario} />
-          <FootItem icon={<Instagram size={16} />} label="Seguinos" val={site.instagram} />
         </div>
         <div style={{ maxWidth: 1100, margin: "24px auto 0", paddingTop: 16, borderTop: "1px solid rgba(252,247,240,.14)", textAlign: "center" }}>
           <span style={{ color: "rgba(252,247,240,.4)", fontSize: 12 }}>© {new Date().getFullYear()} {site.nombre} · Todos los derechos reservados</span>
@@ -403,15 +424,18 @@ function PantallaError({ error }) {
   );
 }
 
-function FootItem({ icon, label, val }) {
+function FootItem({ icon, label, val, href, externo }) {
+  const Cont = href ? "a" : "div";
+  const linkProps = href ? { href, ...(externo ? { target: "_blank", rel: "noreferrer" } : {}) } : {};
   return (
-    <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+    <Cont {...linkProps} className={href ? "cf-btn" : undefined}
+      style={{ display: "flex", gap: 10, alignItems: "flex-start", textDecoration: "none", cursor: href ? "pointer" : "default" }}>
       <div style={{ color: C.terra, marginTop: 2 }}>{icon}</div>
       <div>
         <div style={{ color: C.terra, fontSize: 10, textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 3 }}>{label}</div>
         <div style={{ color: "rgba(252,247,240,.85)", fontSize: 13, lineHeight: 1.5 }}>{val}</div>
       </div>
-    </div>
+    </Cont>
   );
 }
 
@@ -750,23 +774,30 @@ function Contacto({ site }) {
   const items = [
     { icon: <MapPin size={20} />, label: "Direccion", val: site.direccion },
     { icon: <Clock size={20} />, label: "Horario", val: site.horario },
-    { icon: <Phone size={20} />, label: "Telefono", val: site.telefono },
-    { icon: <MessageCircle size={20} />, label: "WhatsApp", val: site.whatsapp },
-    { icon: <Instagram size={20} />, label: "Instagram", val: site.instagram },
+    { icon: <Phone size={20} />, label: "Telefono", val: site.telefono, href: telUrl(site.telefono) },
+    { icon: <MessageCircle size={20} />, label: "WhatsApp", val: site.whatsapp, href: waUrl(site.whatsapp), externo: true },
+    { icon: <Instagram size={20} />, label: "Instagram", val: site.instagram, href: igUrl(site.instagram), externo: true },
   ];
   return (
     <>
       <SectionTitle>Contacto y ubicacion</SectionTitle>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
-        {items.filter((it) => it.val).map((it, i) => (
-          <div key={i} style={{ background: C.cremaSoft, border: `1px solid ${C.borde}`, borderRadius: 12, padding: 20, display: "flex", gap: 14, alignItems: "flex-start" }}>
-            <div style={{ width: 42, height: 42, borderRadius: 10, background: C.terra, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{it.icon}</div>
-            <div>
-              <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".07em", color: C.marronSoft, marginBottom: 4 }}>{it.label}</div>
-              <div style={{ fontSize: 15, color: C.texto, fontWeight: 500 }}>{it.val}</div>
-            </div>
-          </div>
-        ))}
+        {items.filter((it) => it.val).map((it, i) => {
+          const Cont = it.href ? "a" : "div";
+          const linkProps = it.href
+            ? { href: it.href, ...(it.externo ? { target: "_blank", rel: "noreferrer" } : {}) }
+            : {};
+          return (
+            <Cont key={i} {...linkProps} className={it.href ? "cf-btn" : undefined}
+              style={{ background: C.cremaSoft, border: `1px solid ${C.borde}`, borderRadius: 12, padding: 20, display: "flex", gap: 14, alignItems: "flex-start", textDecoration: "none", cursor: it.href ? "pointer" : "default" }}>
+              <div style={{ width: 42, height: 42, borderRadius: 10, background: C.terra, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{it.icon}</div>
+              <div>
+                <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".07em", color: C.marronSoft, marginBottom: 4 }}>{it.label}</div>
+                <div style={{ fontSize: 15, color: C.texto, fontWeight: 500 }}>{it.val}</div>
+              </div>
+            </Cont>
+          );
+        })}
       </div>
     </>
   );
