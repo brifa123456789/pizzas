@@ -90,4 +90,5 @@ INSERT IGNORE INTO site_settings (setting_key, setting_value) VALUES
   ('instagram',   '@bellanapoli'),
   ('envio',        ''),
   ('horaApertura', '18:00'),
-  ('horaCierre',   '22:00');
+  ('horaCierre',   '22:00'),
+  ('diasCerrado',  '');

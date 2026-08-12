@@ -83,9 +83,23 @@ function parseHoraMin(s, def) {
   const mi = Math.min(59, parseInt(m[2] || "0", 10) || 0);
   return h * 60 + mi;
 }
-// ¿La tienda esta abierta ahora? (segun hora local del cliente)
+// Dias en que la tienda cierra (0=Dom, 1=Lun, ... 6=Sab) como Set
+function diasCerradoSet(site) {
+  return new Set(
+    String(site?.diasCerrado || "")
+      .split(",")
+      .map((s) => parseInt(s.trim(), 10))
+      .filter((n) => !isNaN(n))
+  );
+}
+// ¿Hoy es un dia cerrado?
+function cerradoHoy(site) {
+  return diasCerradoSet(site).has(new Date().getDay());
+}
+// ¿La tienda esta abierta ahora? (dia + hora local del cliente)
 function estaAbierto(site) {
   if (!site) return true;
+  if (cerradoHoy(site)) return false;            // dia cerrado (ej: lunes)
   const aper = parseHoraMin(site.horaApertura, 18 * 60);
   const cierre = parseHoraMin(site.horaCierre, 22 * 60);
   const now = new Date();
@@ -308,7 +322,9 @@ function SitioPublico({ onAdmin }) {
       {/* CARTEL DE CERRADO */}
       {!abierto && (
         <div style={{ background: "#C6553F", color: "#fff", padding: "11px 16px", textAlign: "center", fontSize: 14, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, flexWrap: "wrap" }}>
-          <Clock size={16} /> Estamos cerrados por ahora · Atendemos de {horarioTxt(site)}
+          <Clock size={16} /> {cerradoHoy(site)
+            ? "Hoy permanecemos cerrados"
+            : `Estamos cerrados por ahora · Atendemos de ${horarioTxt(site)}`}
         </div>
       )}
 
@@ -924,7 +940,7 @@ function AdminPanel({ setLogueado, onSalir }) {
           {seccion === "categorias" && <AdminCategorias />}
           {seccion === "inicio" && <AdminSite campos={["nombre", "eslogan", "subtitulo", "descripcion"]} titulo="Pagina de inicio" sub="Textos que ven tus clientes al entrar" onSaved={setSite} />}
           {seccion === "contacto" && <AdminSite campos={["direccion", "horario", "telefono", "whatsapp", "instagram"]} titulo="Datos de contacto" sub="Direccion, horario y redes" onSaved={setSite} />}
-          {seccion === "pedidos" && <AdminSite campos={["envio", "horaApertura", "horaCierre"]} titulo="Envío y horario de atención" sub="Costo de envío y en qué horario se puede pedir" onSaved={setSite} />}
+          {seccion === "pedidos" && <AdminSite campos={["envio", "horaApertura", "horaCierre", "diasCerrado"]} titulo="Envío y horario de atención" sub="Costo de envío, horario y días de cierre" onSaved={setSite} />}
         </main>
       </div>
 
@@ -1391,6 +1407,7 @@ function AdminSite({ campos, titulo, sub, onSaved }) {
     descripcion: "Descripcion (Nosotros)", direccion: "Direccion", horario: "Horario",
     telefono: "Telefono", whatsapp: "WhatsApp", instagram: "Instagram",
     envio: "Costo de envío", horaApertura: "Hora de apertura", horaCierre: "Hora de cierre",
+    diasCerrado: "Días que cierra",
   };
   const hints = {
     eslogan: "Separa con una coma para el efecto de color: 'Pizza a la piedra, hecha como en casa.'",
@@ -1398,6 +1415,7 @@ function AdminSite({ campos, titulo, sub, onSaved }) {
     envio: "Solo el número. Vacío = 'A coordinar'. Ej: 1.500",
     horaApertura: "Formato 24hs. Ej: 18:00. Antes de esta hora la tienda aparece cerrada.",
     horaCierre: "Formato 24hs. Ej: 22:00. Después de esta hora no se puede pedir.",
+    diasCerrado: "Marcá los días en que la tienda no atiende (ej: Lunes).",
   };
 
   useEffect(() => {
@@ -1428,9 +1446,13 @@ function AdminSite({ campos, titulo, sub, onSaved }) {
     <>
       <AdminHeader titulo={titulo} sub={sub} />
       <div style={{ maxWidth: 560 }}>
-        {campos.map((k) => (
-          <CampoAdmin key={k} label={etiquetas[k]} value={form[k] || ""} hint={hints[k]} textarea={k === "descripcion"} onChange={(v) => set(k, v)} />
-        ))}
+        {campos.map((k) =>
+          k === "diasCerrado" ? (
+            <DiasCerradoPicker key={k} label={etiquetas[k]} hint={hints[k]} value={form[k] || ""} onChange={(v) => set(k, v)} />
+          ) : (
+            <CampoAdmin key={k} label={etiquetas[k]} value={form[k] || ""} hint={hints[k]} textarea={k === "descripcion"} onChange={(v) => set(k, v)} />
+          )
+        )}
         <button onClick={guardar} disabled={guardando} className="cf-btn"
           style={{ marginTop: 8, background: guardado ? C.verde : C.terra, color: "#fff", border: "none", padding: "11px 22px", borderRadius: 8, fontSize: 14, fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}>
           {guardando ? <Loader2 size={16} className="cf-spin" /> : guardado ? <Check size={16} /> : null}
@@ -1438,6 +1460,37 @@ function AdminSite({ campos, titulo, sub, onSaved }) {
         </button>
       </div>
     </>
+  );
+}
+
+/* Selector de dias de cierre (0=Dom ... 6=Sab, convencion de getDay) */
+const DIAS_SEMANA = [
+  { n: 1, label: "Lun" }, { n: 2, label: "Mar" }, { n: 3, label: "Mié" },
+  { n: 4, label: "Jue" }, { n: 5, label: "Vie" }, { n: 6, label: "Sáb" }, { n: 0, label: "Dom" },
+];
+function DiasCerradoPicker({ label, hint, value, onChange }) {
+  const sel = new Set(String(value || "").split(",").map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n)));
+  const toggle = (n) => {
+    const nuevo = new Set(sel);
+    nuevo.has(n) ? nuevo.delete(n) : nuevo.add(n);
+    onChange([...nuevo].sort((a, b) => a - b).join(","));
+  };
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <label style={{ fontSize: 12, fontWeight: 600, color: C.texto }}>{label}</label>
+      {hint && <div style={{ fontSize: 11, color: C.marronSoft, margin: "2px 0 4px" }}>{hint}</div>}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
+        {DIAS_SEMANA.map((d) => {
+          const activo = sel.has(d.n);
+          return (
+            <button key={d.n} type="button" onClick={() => toggle(d.n)} className="cf-btn"
+              style={{ padding: "8px 14px", borderRadius: 9, fontSize: 13, fontWeight: 600, cursor: "pointer", border: `1.5px solid ${activo ? "#C6553F" : C.borde}`, background: activo ? "#C6553F" : "#fff", color: activo ? "#fff" : C.texto }}>
+              {d.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
