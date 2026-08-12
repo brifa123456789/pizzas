@@ -78,6 +78,7 @@ async function main() {
     images: "ALTER TABLE items ADD COLUMN images LONGTEXT AFTER image",
     subcategory: "ALTER TABLE items ADD COLUMN subcategory VARCHAR(80) DEFAULT '' AFTER category_id",
     sizes: "ALTER TABLE items ADD COLUMN sizes VARCHAR(160) DEFAULT '' AFTER subcategory",
+    size_prices: "ALTER TABLE items ADD COLUMN size_prices LONGTEXT AFTER sizes",
     badge: "ALTER TABLE items ADD COLUMN badge VARCHAR(20) DEFAULT '' AFTER sizes",
     badge_label: "ALTER TABLE items ADD COLUMN badge_label VARCHAR(40) DEFAULT '' AFTER badge",
   };

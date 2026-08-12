@@ -16,6 +16,31 @@ function parseImages(row) {
   return row.image ? [row.image] : [];
 }
 
+// Lee los precios por tamaño: columna `size_prices` (JSON [{name, price}])
+function parseSizePrices(row) {
+  if (row.size_prices) {
+    try {
+      const arr = JSON.parse(row.size_prices);
+      if (Array.isArray(arr)) {
+        return arr
+          .filter((x) => x && x.name != null && String(x.name).trim())
+          .map((x) => ({ name: String(x.name).trim(), price: String(x.price || "").trim() }));
+      }
+    } catch {}
+  }
+  return [];
+}
+
+// Prepara los valores de tamaño/precio para guardar: JSON + string de nombres
+function valoresSizePrices(sizePrices) {
+  const arr = Array.isArray(sizePrices)
+    ? sizePrices
+        .filter((x) => x && x.name != null && String(x.name).trim())
+        .map((x) => ({ name: String(x.name).trim(), price: String(x.price || "").trim() }))
+    : [];
+  return { json: arr.length ? JSON.stringify(arr) : null, sizes: arr.map((x) => x.name).join(", ") };
+}
+
 // Convierte una fila de la BD al formato que usa el frontend
 function mapItem(row) {
   const imgs = parseImages(row);
@@ -27,6 +52,7 @@ function mapItem(row) {
     cat: row.category_id,
     subcat: row.subcategory || "",
     sizes: row.sizes || "",
+    sizePrices: parseSizePrices(row),
     badge: row.badge || "",
     badgeLabel: row.badge_label || "",
     visible: !!row.visible,
@@ -82,7 +108,7 @@ router.get("/", requiereAuth, async (_req, res) => {
 
 // POST /api/items  (crear) — el precio es OPCIONAL
 router.post("/", requiereAuth, async (req, res) => {
-  const { name, desc, price, cat, subcat, sizes, badge, badgeLabel, visible = true, images } = req.body;
+  const { name, desc, price, cat, subcat, sizes, sizePrices, badge, badgeLabel, visible = true, images } = req.body;
   if (!name || !cat) {
     return res.status(400).json({ error: "Nombre y categoria son obligatorios." });
   }
@@ -90,11 +116,13 @@ router.post("/", requiereAuth, async (req, res) => {
     return res.status(400).json({ error: "Alguna imagen no es valida o es demasiado pesada (max 8 fotos)." });
   }
   const img = valoresImagen(images);
+  const sp = valoresSizePrices(sizePrices);
+  const sizesFinal = sp.sizes || sizes || "";
   try {
     const [result] = await pool.query(
-      `INSERT INTO items (name, description, price, category_id, subcategory, sizes, badge, badge_label, visible, image, images)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [name, desc || "", price || "", cat, subcat || "", sizes || "", limpiarBadge(badge), badgeLabel || "", visible ? 1 : 0, img.primera, img.json]
+      `INSERT INTO items (name, description, price, category_id, subcategory, sizes, size_prices, badge, badge_label, visible, image, images)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [name, desc || "", price || "", cat, subcat || "", sizesFinal, sp.json, limpiarBadge(badge), badgeLabel || "", visible ? 1 : 0, img.primera, img.json]
     );
     const [rows] = await pool.query("SELECT * FROM items WHERE id = ?", [result.insertId]);
     res.status(201).json(mapItem(rows[0]));
@@ -129,16 +157,18 @@ router.put("/reorder", requiereAuth, async (req, res) => {
 
 // PUT /api/items/:id  (actualizar)
 router.put("/:id", requiereAuth, async (req, res) => {
-  const { name, desc, price, cat, subcat, sizes, badge, badgeLabel, visible, images } = req.body;
+  const { name, desc, price, cat, subcat, sizes, sizePrices, badge, badgeLabel, visible, images } = req.body;
   if (imagenesInvalidas(images)) {
     return res.status(400).json({ error: "Alguna imagen no es valida o es demasiado pesada (max 8 fotos)." });
   }
   const img = valoresImagen(images);
+  const sp = valoresSizePrices(sizePrices);
+  const sizesFinal = sp.sizes || sizes || "";
   try {
     await pool.query(
       `UPDATE items SET name = ?, description = ?, price = ?, category_id = ?, subcategory = ?,
-       sizes = ?, badge = ?, badge_label = ?, visible = ?, image = ?, images = ? WHERE id = ?`,
-      [name, desc || "", price || "", cat, subcat || "", sizes || "", limpiarBadge(badge), badgeLabel || "", visible ? 1 : 0, img.primera, img.json, req.params.id]
+       sizes = ?, size_prices = ?, badge = ?, badge_label = ?, visible = ?, image = ?, images = ? WHERE id = ?`,
+      [name, desc || "", price || "", cat, subcat || "", sizesFinal, sp.json, limpiarBadge(badge), badgeLabel || "", visible ? 1 : 0, img.primera, img.json, req.params.id]
     );
     const [rows] = await pool.query("SELECT * FROM items WHERE id = ?", [req.params.id]);
     if (!rows[0]) return res.status(404).json({ error: "Producto no encontrado." });

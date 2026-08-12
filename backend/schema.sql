@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS items (
   category_id VARCHAR(20)  NOT NULL,
   subcategory VARCHAR(80)  DEFAULT '',     -- ej: "Clasicas", "Especiales"
   sizes       VARCHAR(160) DEFAULT '',     -- tamaños: "Chica, Mediana, Grande"
+  size_prices LONGTEXT,                    -- precio por tamaño: JSON [{name, price}]
   badge       VARCHAR(20)  DEFAULT '',     -- '', 'new' o 'sale'
   badge_label VARCHAR(40)  DEFAULT '',     -- texto opcional del badge (ej: "Oferta")
   visible     TINYINT(1)   NOT NULL DEFAULT 1,
@@ -62,18 +63,18 @@ INSERT INTO categories (id, name, color, position) VALUES
   ('bebidas',      'Bebidas',       '#5AAE8A', 5)
 ON DUPLICATE KEY UPDATE name = VALUES(name);
 
-INSERT INTO items (name, description, price, category_id, subcategory, sizes, badge, badge_label, visible, position) VALUES
-  ('Muzzarella', 'Salsa de tomate, muzzarella y aceitunas', '7.500', 'clasicas', 'Clásicas', 'Chica, Mediana, Grande', 'new', '', 1, 1),
-  ('Napolitana', 'Muzzarella, rodajas de tomate, ajo y albahaca', '8.900', 'clasicas', 'Clásicas', 'Chica, Mediana, Grande', '', '', 1, 2),
-  ('Jamón y morrón', 'Muzzarella, jamón cocido y morrones', '9.200', 'clasicas', 'Clásicas', 'Chica, Mediana, Grande', '', '', 1, 3),
-  ('Fugazzeta', 'Cebolla dorada y abundante muzzarella', '9.200', 'especiales', 'Especiales', 'Chica, Mediana, Grande', '', '', 1, 4),
-  ('Calabresa', 'Longaniza calabresa, muzzarella y morrón', '9.800', 'especiales', 'Especiales', 'Chica, Mediana, Grande', 'sale', 'Oferta', 1, 5),
-  ('Cuatro quesos', 'Muzzarella, roquefort, provolone y parmesano', '10.500', 'especiales', 'Especiales', 'Chica, Mediana, Grande', 'new', '', 1, 6),
-  ('Vegetariana', 'Verduras grilladas de estación y muzzarella', '9.000', 'vegetarianas', 'Vegetarianas', 'Chica, Mediana, Grande', '', '', 1, 7),
-  ('Rúcula y parmesano', 'Muzzarella, rúcula fresca y láminas de parmesano', '9.900', 'vegetarianas', 'Vegetarianas', 'Chica, Mediana, Grande', '', '', 1, 8),
-  ('Empanada de carne', 'Carne cortada a cuchillo, cocida al horno', '1.200', 'empanadas', 'Empanadas', 'Unidad, Docena', '', '', 1, 9),
-  ('Empanada de jamón y queso', 'Clásica, bien gratinada', '1.200', 'empanadas', 'Empanadas', 'Unidad, Docena', '', '', 0, 10),
-  ('Gaseosa 1.5L', 'Línea Coca-Cola, bien fría', '2.500', 'bebidas', 'Bebidas', '', '', '', 1, 11)
+INSERT INTO items (name, description, price, category_id, subcategory, sizes, size_prices, badge, badge_label, visible, position) VALUES
+  ('Muzzarella', 'Salsa de tomate, muzzarella y aceitunas', '11.000', 'clasicas', '', 'Chica, Mediana, Grande', '[{"name":"Chica","price":"8.000"},{"name":"Mediana","price":"11.000"},{"name":"Grande","price":"13.000"}]', '', '', 1, 1),
+  ('Napolitana', 'Muzzarella, rodajas de tomate, ajo y albahaca', '12.500', 'clasicas', '', 'Chica, Mediana, Grande', '[{"name":"Chica","price":"9.500"},{"name":"Mediana","price":"12.500"},{"name":"Grande","price":"14.500"}]', '', '', 1, 2),
+  ('Jamón y morrón', 'Muzzarella, jamón cocido y morrones', '13.000', 'clasicas', '', 'Chica, Mediana, Grande', '[{"name":"Chica","price":"10.000"},{"name":"Mediana","price":"13.000"},{"name":"Grande","price":"15.000"}]', '', '', 1, 3),
+  ('Fugazzeta', 'Cebolla dorada y abundante muzzarella', '12.500', 'especiales', '', 'Chica, Mediana, Grande', '[{"name":"Chica","price":"9.500"},{"name":"Mediana","price":"12.500"},{"name":"Grande","price":"14.500"}]', '', '', 1, 4),
+  ('Calabresa', 'Longaniza calabresa, muzzarella y morrón', '13.500', 'especiales', '', 'Chica, Mediana, Grande', '[{"name":"Chica","price":"10.500"},{"name":"Mediana","price":"13.500"},{"name":"Grande","price":"16.000"}]', '', '', 1, 5),
+  ('Cuatro quesos', 'Muzzarella, roquefort, provolone y parmesano', '14.500', 'especiales', '', 'Chica, Mediana, Grande', '[{"name":"Chica","price":"11.000"},{"name":"Mediana","price":"14.500"},{"name":"Grande","price":"16.500"}]', '', '', 1, 6),
+  ('Vegetariana', 'Verduras grilladas de estación y muzzarella', '12.500', 'vegetarianas', '', 'Chica, Mediana, Grande', '[{"name":"Chica","price":"9.500"},{"name":"Mediana","price":"12.500"},{"name":"Grande","price":"14.500"}]', '', '', 1, 7),
+  ('Rúcula y parmesano', 'Muzzarella, rúcula fresca y láminas de parmesano', '13.500', 'vegetarianas', '', 'Chica, Mediana, Grande', '[{"name":"Chica","price":"10.500"},{"name":"Mediana","price":"13.500"},{"name":"Grande","price":"15.500"}]', '', '', 1, 8),
+  ('Empanada de carne', 'Carne cortada a cuchillo, cocida al horno', '1.200', 'empanadas', '', 'Unidad, Docena', '[{"name":"Unidad","price":"1.200"},{"name":"Docena","price":"13.000"}]', '', '', 1, 9),
+  ('Empanada de jamón y queso', 'Clásica, bien gratinada', '1.200', 'empanadas', '', 'Unidad, Docena', '[{"name":"Unidad","price":"1.200"},{"name":"Docena","price":"13.000"}]', '', '', 0, 10),
+  ('Gaseosa 1.5L', 'Línea Coca-Cola, bien fría', '2.500', 'bebidas', '', '', NULL, '', '', 1, 11)
 ;
 
 INSERT INTO site_settings (setting_key, setting_value) VALUES

@@ -47,9 +47,22 @@ function fotosDe(it) {
   return it.image ? [it.image] : [];
 }
 
-// Talles de un producto (texto separado por comas → array)
+// Precios por tamaño de un producto (array [{name, price}])
+function sizePricesDe(it) {
+  return Array.isArray(it.sizePrices) ? it.sizePrices.filter((s) => s && s.name) : [];
+}
+
+// Talles de un producto: usa los tamaños con precio si existen, sino el texto libre
 function tallesDe(it) {
+  const sp = sizePricesDe(it);
+  if (sp.length) return sp.map((s) => s.name);
   return (it.sizes || "").split(",").map((s) => s.trim()).filter(Boolean);
+}
+
+// Precio para un tamaño puntual (o el precio base si ese tamaño no tiene precio propio)
+function precioDeTalle(it, talle) {
+  const sp = sizePricesDe(it).find((s) => s.name === talle);
+  return sp && sp.price ? sp.price : it.price;
 }
 
 // Precio a numero (para sumar el carrito). "12.900" → 12900. Vacio → 0.
@@ -61,6 +74,19 @@ const fmt = (n) => n.toLocaleString("es-AR");
 // Muestra el precio o "Consultar" si esta vacio
 function precioTxt(p) {
   return precioNum(p) > 0 ? `$${p}` : "Consultar";
+}
+// Resumen de precio para la tabla del admin: rango si hay precios por tamaño
+function precioResumen(it) {
+  const sp = (Array.isArray(it.sizePrices) ? it.sizePrices : []).filter((s) => s && s.name);
+  if (sp.length) {
+    const nums = sp.map((s) => precioNum(s.price)).filter((n) => n > 0);
+    if (nums.length) {
+      const mn = Math.min(...nums), mx = Math.max(...nums);
+      return mn === mx ? `$${fmt(mn)}` : `$${fmt(mn)} – $${fmt(mx)}`;
+    }
+    return "Consultar";
+  }
+  return precioTxt(it.price);
 }
 
 /* ============================================================
@@ -152,7 +178,8 @@ function SitioPublico({ onAdmin }) {
   }, []);
 
   // ─── Acciones del carrito ───
-  const agregarAlCarrito = (it, talle = "") => {
+  const agregarAlCarrito = (it, talle = "", price = null) => {
+    const precioFinal = price != null ? price : precioDeTalle(it, talle);
     const key = `${it.id}::${talle}`;
     setCart((prev) => {
       const idx = prev.findIndex((x) => x.key === key);
@@ -161,7 +188,7 @@ function SitioPublico({ onAdmin }) {
         copia[idx] = { ...copia[idx], qty: copia[idx].qty + 1 };
         return copia;
       }
-      return [...prev, { key, id: it.id, name: it.name, price: it.price, image: it.image, talle, qty: 1 }];
+      return [...prev, { key, id: it.id, name: it.name, price: precioFinal, image: it.image, talle, qty: 1 }];
     });
     setCartAbierto(true);
   };
@@ -298,7 +325,7 @@ function SitioPublico({ onAdmin }) {
       {/* MODAL DETALLE DE PRODUCTO */}
       {productoVer && (
         <ProductoModal it={productoVer} cats={cats} onCerrar={() => setProductoVer(null)}
-          onAgregar={(talle) => { agregarAlCarrito(productoVer, talle); setProductoVer(null); }} />
+          onAgregar={(talle) => { agregarAlCarrito(productoVer, talle, precioDeTalle(productoVer, talle)); setProductoVer(null); }} />
       )}
 
       {/* WHATSAPP flotante + globo de ayuda */}
@@ -311,6 +338,8 @@ function SitioPublico({ onAdmin }) {
           .cf-mobile-menu { display: flex !important; }
           .cf-hero-emojis { display: none !important; }
           .cf-grid-prod { grid-template-columns: 1fr !important; gap: 10px !important; }
+          .cf-modal-carrusel { min-height: 0 !important; flex-basis: auto !important; }
+          .cf-modal-img { max-height: 190px !important; object-fit: cover !important; }
         }
       `}</style>
     </div>
@@ -359,7 +388,7 @@ function TarjetaProducto({ it, onVer, onAgregar }) {
 
   const clickAgregar = (e) => {
     e.stopPropagation();
-    onAgregar(it, sel);   // usa el tamaño elegido en la tarjeta
+    onAgregar(it, sel, precioDeTalle(it, sel));   // usa el tamaño y su precio
   };
 
   return (
@@ -388,7 +417,7 @@ function TarjetaProducto({ it, onVer, onAgregar }) {
           </div>
         )}
         <div style={{ marginTop: "auto", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, paddingTop: 2 }}>
-          <span style={{ fontSize: 16, fontWeight: 700, color: C.terra }}>{precioTxt(it.price)}</span>
+          <span style={{ fontSize: 16, fontWeight: 700, color: C.terra }}>{precioTxt(precioDeTalle(it, sel))}</span>
           <button onClick={clickAgregar} className="cf-btn"
             style={{ background: C.marron, color: "#fff", border: "none", padding: "8px 15px", borderRadius: 9, fontSize: 12, fontWeight: 600, display: "flex", alignItems: "center", gap: 5 }}>
             <ShoppingBag size={14} /> Agregar
@@ -468,12 +497,12 @@ function ProductoModal({ it, cats, onCerrar, onAgregar }) {
 
   return (
     <div onClick={onCerrar} style={{ position: "fixed", inset: 0, background: "rgba(43,37,33,.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16, zIndex: 120, animation: "cffade .15s ease" }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: C.cremaSoft, borderRadius: 18, width: "100%", maxWidth: 820, maxHeight: "92vh", overflow: "hidden", boxShadow: "0 24px 70px rgba(0,0,0,.35)", display: "flex", flexDirection: "column" }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: C.cremaSoft, borderRadius: 18, width: "100%", maxWidth: 820, maxHeight: "92vh", overflowY: "auto", boxShadow: "0 24px 70px rgba(0,0,0,.35)", display: "flex", flexDirection: "column" }}>
         <div style={{ display: "flex", flexWrap: "wrap" }}>
           {/* Carrusel */}
-          <div style={{ position: "relative", flex: "1 1 340px", minHeight: 320, background: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div className="cf-modal-carrusel" style={{ position: "relative", flex: "1 1 340px", minHeight: 320, background: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}>
             {fotos[i] ? (
-              <img src={fotos[i]} alt={it.name} style={{ width: "100%", height: "100%", maxHeight: 460, objectFit: "contain" }} />
+              <img className="cf-modal-img" src={fotos[i]} alt={it.name} style={{ width: "100%", height: "100%", maxHeight: 460, objectFit: "contain" }} />
             ) : (
               <ImageIcon size={64} color={C.borde} />
             )}
@@ -496,7 +525,7 @@ function ProductoModal({ it, cats, onCerrar, onAgregar }) {
               <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 12, background: cat.color + "22", color: cat.color, fontWeight: 600 }}>{cat.name}</span>
             </div>
             <h2 className="ff-display" style={{ fontSize: 26, fontWeight: 700, color: C.texto, margin: "4px 40px 4px 0", lineHeight: 1.15 }}>{it.name}</h2>
-            <div style={{ fontSize: 24, fontWeight: 700, color: C.terra, margin: "10px 0 14px" }}>{precioTxt(it.price)}</div>
+            <div style={{ fontSize: 24, fontWeight: 700, color: C.terra, margin: "10px 0 14px" }}>{precioTxt(precioDeTalle(it, talle))}</div>
             {it.desc && <p style={{ fontSize: 14, color: C.marronSoft, lineHeight: 1.6, margin: "0 0 16px" }}>{it.desc}</p>}
 
             {talles.length > 0 && (
@@ -967,7 +996,7 @@ function AdminCatalogo() {
                     <span style={{ fontSize: 12, padding: "3px 10px", borderRadius: 12, background: cat.color + "22", color: cat.color, fontWeight: 600 }}>{cat.name}</span>
                   </td>
                   <td className="cf-col-hide" style={{ padding: "12px 16px", fontSize: 12, color: C.marronSoft, maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.sizes || "—"}</td>
-                  <td style={{ padding: "12px 16px", fontWeight: 600, color: precioNum(it.price) ? C.terra : C.marronSoft }}>{precioTxt(it.price)}</td>
+                  <td style={{ padding: "12px 16px", fontWeight: 600, whiteSpace: "nowrap", color: C.terra }}>{precioResumen(it)}</td>
                   <td style={{ padding: "12px 16px", textAlign: "center" }}>
                     <button onClick={() => toggleVisible(it)} className="cf-btn" title={it.visible ? "Ocultar" : "Mostrar"}
                       style={{ background: "transparent", border: "none", color: it.visible ? C.verde : C.marronSoft }}>
@@ -1083,11 +1112,30 @@ const limpiarPrecio = (v) => v.replace(/[^\d.,]/g, "");
 function ModalProducto({ item, cats, onGuardar, onCerrar }) {
   const [form, setForm] = useState(
     item
-      ? { ...item, images: fotosDe(item) }
-      : { name: "", desc: "", price: "", cat: cats[0]?.id || "", subcat: "", sizes: "", badge: "", badgeLabel: "", images: [] }
+      ? {
+          ...item,
+          images: fotosDe(item),
+          // si ya tiene precios por tamaño los usa; si solo tiene tamaños en texto, los precarga sin precio
+          sizePrices: sizePricesDe(item).length
+            ? sizePricesDe(item)
+            : tallesDe(item).map((n) => ({ name: n, price: "" })),
+        }
+      : { name: "", desc: "", price: "", cat: cats[0]?.id || "", subcat: "", sizes: "", sizePrices: [], badge: "", badgeLabel: "", images: [] }
   );
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const valido = form.name.trim() && form.cat;   // precio OPCIONAL
+
+  // Filas de tamaño + precio
+  const sp = form.sizePrices || [];
+  const setSP = (i, k, v) =>
+    setForm((f) => {
+      const a = [...(f.sizePrices || [])];
+      a[i] = { ...a[i], [k]: k === "price" ? limpiarPrecio(v) : v };
+      return { ...f, sizePrices: a };
+    });
+  const addSP = () => setForm((f) => ({ ...f, sizePrices: [...(f.sizePrices || []), { name: "", price: "" }] }));
+  const delSP = (i) => setForm((f) => ({ ...f, sizePrices: (f.sizePrices || []).filter((_, k) => k !== i) }));
+  const usaTamaños = sp.length > 0;
 
   return (
     <ModalShell titulo={item ? "Editar producto" : "Nuevo producto"} onCerrar={onCerrar}>
@@ -1101,10 +1149,10 @@ function ModalProducto({ item, cats, onGuardar, onCerrar }) {
         <SelectorImagenes value={form.images} onChange={(imgs) => set("images", imgs)} />
       </Campo>
       <div style={{ display: "flex", gap: 12 }}>
-        <Campo label="Precio (opcional)" style={{ flex: 1 }}>
+        <Campo label={usaTamaños ? "Precio base (no se usa si hay tamaños)" : "Precio (opcional)"} style={{ flex: 1 }}>
           <div style={{ position: "relative" }}>
             <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: C.marronSoft, fontSize: 14 }}>$</span>
-            <input value={form.price} inputMode="decimal" onChange={(e) => set("price", limpiarPrecio(e.target.value))} placeholder="Vacio = Consultar" style={{ ...inputStyle, paddingLeft: 24 }} />
+            <input value={form.price} inputMode="decimal" onChange={(e) => set("price", limpiarPrecio(e.target.value))} placeholder="Vacio = Consultar" style={{ ...inputStyle, paddingLeft: 24, opacity: usaTamaños ? 0.5 : 1 }} disabled={usaTamaños} />
           </div>
         </Campo>
         <Campo label="Categoria" style={{ flex: 1 }}>
@@ -1113,9 +1161,26 @@ function ModalProducto({ item, cats, onGuardar, onCerrar }) {
           </select>
         </Campo>
       </div>
-      <Campo label="Tamaños">
-        <input value={form.sizes || ""} onChange={(e) => set("sizes", e.target.value)} placeholder="Ej: Chica, Mediana, Grande" style={inputStyle} />
-        <div style={{ fontSize: 11, color: C.marronSoft, marginTop: 4 }}>Separá con comas. Aparecen como botones para elegir en el menú (ej: Chica, Mediana, Grande).</div>
+
+      <Campo label="Tamaños y precio">
+        <div style={{ fontSize: 11, color: C.marronSoft, marginBottom: 8 }}>
+          Cargá un precio por cada tamaño (ej: Chica, Mediana, Grande). Al elegir el tamaño en el menú, el precio cambia solo. Si no cargás ninguno, se usa el precio de arriba.
+        </div>
+        {sp.map((row, i) => (
+          <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
+            <input value={row.name || ""} onChange={(e) => setSP(i, "name", e.target.value)} placeholder="Tamaño (ej: Grande)" style={{ ...inputStyle, flex: 1.2 }} />
+            <div style={{ position: "relative", flex: 1 }}>
+              <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: C.marronSoft, fontSize: 14 }}>$</span>
+              <input value={row.price || ""} inputMode="decimal" onChange={(e) => setSP(i, "price", e.target.value)} placeholder="Precio" style={{ ...inputStyle, paddingLeft: 24 }} />
+            </div>
+            <button type="button" onClick={() => delSP(i)} className="cf-btn" title="Quitar tamaño"
+              style={{ background: "transparent", border: `1px solid ${C.borde}`, color: "#C6553F", width: 38, height: 38, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Trash2 size={15} /></button>
+          </div>
+        ))}
+        <button type="button" onClick={addSP} className="cf-btn"
+          style={{ background: "#fff", border: `1px dashed ${C.borde}`, color: C.terra, padding: "9px 14px", borderRadius: 8, fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+          <Plus size={15} /> Agregar tamaño
+        </button>
       </Campo>
       <div style={{ display: "flex", gap: 10, marginTop: 22 }}>
         <button onClick={onCerrar} className="cf-btn" style={btnSecundario}>Cancelar</button>
