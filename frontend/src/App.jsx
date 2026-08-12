@@ -310,11 +310,7 @@ function SitioPublico({ onAdmin }) {
           .cf-mobile-actions { display: flex !important; }
           .cf-mobile-menu { display: flex !important; }
           .cf-hero-emojis { display: none !important; }
-          .cf-grid-prod { grid-template-columns: repeat(2, 1fr) !important; gap: 10px !important; }
-          .cf-card-img { aspect-ratio: 1 / 1 !important; }
-        }
-        @media (max-width: 380px) {
-          .cf-grid-prod { gap: 8px !important; }
+          .cf-grid-prod { grid-template-columns: 1fr !important; gap: 10px !important; }
         }
       `}</style>
     </div>
@@ -355,36 +351,46 @@ function FootItem({ icon, label, val }) {
   );
 }
 
-/* ---------- Tarjeta de producto ---------- */
-function TarjetaProducto({ it, cat, onVer, onAgregar }) {
-  const badge = badgeInfo(it);
+/* ---------- Tarjeta de producto (fila tipo menu) ---------- */
+function TarjetaProducto({ it, onVer, onAgregar }) {
   const fotos = fotosDe(it);
+  const talles = tallesDe(it);
+  const [sel, setSel] = useState(talles[0] || "");
 
   const clickAgregar = (e) => {
     e.stopPropagation();
-    onAgregar(it, "");   // agrega directo; el talle es opcional (se puede elegir en el detalle)
+    onAgregar(it, sel);   // usa el tamaño elegido en la tarjeta
   };
 
   return (
-    <div className="cf-card" onClick={() => onVer(it)}
-      style={{ position: "relative", background: C.cremaSoft, borderRadius: 16, overflow: "hidden", border: `1px solid ${C.borde}`, cursor: "pointer", display: "flex", flexDirection: "column" }}>
-      {badge && (
-        <span style={{ position: "absolute", top: 12, left: 12, zIndex: 2, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".04em", padding: "3px 10px", borderRadius: 12, background: badge.color, color: "#fff" }}>{badge.text}</span>
-      )}
-      <div className="cf-card-img" style={{ aspectRatio: "4 / 3", background: C.crema, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+    <div className="cf-card cf-menu-row" onClick={() => onVer(it)}
+      style={{ background: C.cremaSoft, borderRadius: 16, overflow: "hidden", border: `1px solid ${C.borde}`, cursor: "pointer", display: "flex", gap: 14, padding: 12 }}>
+      <div style={{ width: 104, height: 104, flexShrink: 0, borderRadius: 12, overflow: "hidden", background: C.crema, display: "flex", alignItems: "center", justifyContent: "center" }}>
         {fotos[0] ? (
           <img src={fotos[0]} alt={it.name} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }} />
         ) : (
-          <ImageIcon size={40} color={C.borde} />
+          <ImageIcon size={34} color={C.borde} />
         )}
       </div>
-      <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8, flex: 1 }}>
+      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 6 }}>
         <div className="ff-display" style={{ fontSize: 16, fontWeight: 600, color: C.texto, lineHeight: 1.2 }}>{it.name}</div>
-        {it.subcat && <div style={{ fontSize: 11, color: C.marronSoft, marginTop: -4 }}>{it.subcat}</div>}
-        <div style={{ marginTop: "auto", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        {it.desc && (
+          <div style={{ fontSize: 12.5, color: C.marronSoft, lineHeight: 1.4, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{it.desc}</div>
+        )}
+        {talles.length > 0 && (
+          <div onClick={(e) => e.stopPropagation()} style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {talles.map((t) => (
+              <button key={t} onClick={() => setSel(t)} className="cf-btn"
+                style={{ padding: "4px 11px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", border: `1.5px solid ${sel === t ? C.terra : C.borde}`, background: sel === t ? C.terra : "#fff", color: sel === t ? "#fff" : C.texto }}>
+                {t}
+              </button>
+            ))}
+          </div>
+        )}
+        <div style={{ marginTop: "auto", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, paddingTop: 2 }}>
           <span style={{ fontSize: 16, fontWeight: 700, color: C.terra }}>{precioTxt(it.price)}</span>
           <button onClick={clickAgregar} className="cf-btn"
-            style={{ background: C.marron, color: "#fff", border: "none", padding: "8px 14px", borderRadius: 9, fontSize: 12, fontWeight: 600, display: "flex", alignItems: "center", gap: 5 }}>
+            style={{ background: C.marron, color: "#fff", border: "none", padding: "8px 15px", borderRadius: 9, fontSize: 12, fontWeight: 600, display: "flex", alignItems: "center", gap: 5 }}>
             <ShoppingBag size={14} /> Agregar
           </button>
         </div>
@@ -395,9 +401,9 @@ function TarjetaProducto({ it, cat, onVer, onAgregar }) {
 
 function GrillaProductos({ cats, items, onVer, onAgregar }) {
   return (
-    <div className="cf-grid-prod" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 16 }}>
+    <div className="cf-grid-prod" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(330px, 1fr))", gap: 14 }}>
       {items.map((it) => (
-        <TarjetaProducto key={it.id} it={it} cat={catById(cats, it.cat)} onVer={onVer} onAgregar={onAgregar} />
+        <TarjetaProducto key={it.id} it={it} onVer={onVer} onAgregar={onAgregar} />
       ))}
     </div>
   );
@@ -446,9 +452,8 @@ function ProductoModal({ it, cats, onCerrar, onAgregar }) {
   const fotos = fotosDe(it);
   const talles = tallesDe(it);
   const cat = catById(cats, it.cat);
-  const badge = badgeInfo(it);
   const [i, setI] = useState(0);
-  const [talle, setTalle] = useState("");
+  const [talle, setTalle] = useState(talles[0] || "");
 
   const prev = () => setI((n) => (n - 1 + fotos.length) % fotos.length);
   const next = () => setI((n) => (n + 1) % fotos.length);
@@ -488,18 +493,16 @@ function ProductoModal({ it, cats, onCerrar, onAgregar }) {
           <div style={{ flex: "1 1 320px", padding: 24, position: "relative" }}>
             <button onClick={onCerrar} className="cf-btn" style={{ position: "absolute", top: 16, right: 16, background: C.crema, border: "none", borderRadius: "50%", width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", color: C.marronSoft }}><X size={18} /></button>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-              {badge && <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", padding: "3px 10px", borderRadius: 12, background: badge.color, color: "#fff" }}>{badge.text}</span>}
               <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 12, background: cat.color + "22", color: cat.color, fontWeight: 600 }}>{cat.name}</span>
             </div>
             <h2 className="ff-display" style={{ fontSize: 26, fontWeight: 700, color: C.texto, margin: "4px 40px 4px 0", lineHeight: 1.15 }}>{it.name}</h2>
-            {it.subcat && <div style={{ fontSize: 13, color: C.marronSoft, marginBottom: 8 }}>{it.subcat}</div>}
             <div style={{ fontSize: 24, fontWeight: 700, color: C.terra, margin: "10px 0 14px" }}>{precioTxt(it.price)}</div>
             {it.desc && <p style={{ fontSize: 14, color: C.marronSoft, lineHeight: 1.6, margin: "0 0 16px" }}>{it.desc}</p>}
 
             {talles.length > 0 && (
               <div style={{ marginBottom: 18 }}>
                 <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".07em", color: C.marronSoft, marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
-                  <Ruler size={13} /> Elegí el tamaño (opcional)
+                  <Ruler size={13} /> Elegí el tamaño
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                   {talles.map((t) => (
@@ -928,7 +931,6 @@ function AdminCatalogo() {
           <tbody>
             {filtrados.map((it) => {
               const cat = catById(cats, it.cat);
-              const badge = badgeInfo(it);
               const nFotos = fotosDe(it).length;
               const idx = items.findIndex((x) => x.id === it.id);
               return (
@@ -956,9 +958,8 @@ function AdminCatalogo() {
                       <div style={{ minWidth: 0 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                           <span style={{ fontWeight: 600, fontSize: 14, color: C.texto }}>{it.name}</span>
-                          {badge && <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", padding: "1px 6px", borderRadius: 8, background: badge.color, color: "#fff" }}>{badge.text}</span>}
                         </div>
-                        <div className="cf-desc-min" style={{ fontSize: 12, color: C.marronSoft, marginTop: 2, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.subcat ? it.subcat + " · " : ""}{it.desc}</div>
+                        <div className="cf-desc-min" style={{ fontSize: 12, color: C.marronSoft, marginTop: 2, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.desc}</div>
                       </div>
                     </div>
                   </td>
@@ -1112,26 +1113,10 @@ function ModalProducto({ item, cats, onGuardar, onCerrar }) {
           </select>
         </Campo>
       </div>
-      <div style={{ display: "flex", gap: 12 }}>
-        <Campo label="Subcategoria (opcional)" style={{ flex: 1 }}>
-          <input value={form.subcat || ""} onChange={(e) => set("subcat", e.target.value)} placeholder="Ej: Clásicas" style={inputStyle} />
-        </Campo>
-        <Campo label="Tamaños (opcional)" style={{ flex: 1 }}>
-          <input value={form.sizes || ""} onChange={(e) => set("sizes", e.target.value)} placeholder="Ej: Chica, Mediana, Grande" style={inputStyle} />
-        </Campo>
-      </div>
-      <div style={{ display: "flex", gap: 12 }}>
-        <Campo label="Etiqueta" style={{ flex: 1 }}>
-          <select value={form.badge || ""} onChange={(e) => set("badge", e.target.value)} style={inputStyle}>
-            <option value="">Sin etiqueta</option>
-            <option value="new">Nuevo</option>
-            <option value="sale">Oferta</option>
-          </select>
-        </Campo>
-        <Campo label="Texto de la etiqueta (opcional)" style={{ flex: 1 }}>
-          <input value={form.badgeLabel || ""} onChange={(e) => set("badgeLabel", e.target.value)} placeholder="Ej: -20%" style={inputStyle} disabled={!form.badge} />
-        </Campo>
-      </div>
+      <Campo label="Tamaños">
+        <input value={form.sizes || ""} onChange={(e) => set("sizes", e.target.value)} placeholder="Ej: Chica, Mediana, Grande" style={inputStyle} />
+        <div style={{ fontSize: 11, color: C.marronSoft, marginTop: 4 }}>Separá con comas. Aparecen como botones para elegir en el menú (ej: Chica, Mediana, Grande).</div>
+      </Campo>
       <div style={{ display: "flex", gap: 10, marginTop: 22 }}>
         <button onClick={onCerrar} className="cf-btn" style={btnSecundario}>Cancelar</button>
         <button onClick={() => valido && onGuardar(form)} className="cf-btn" style={{ ...btnPrimario, opacity: valido ? 1 : 0.5 }}>
