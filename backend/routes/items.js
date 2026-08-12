@@ -104,6 +104,29 @@ router.post("/", requiereAuth, async (req, res) => {
   }
 });
 
+// PUT /api/items/reorder  (guardar el orden)  ← debe ir ANTES de "/:id"
+router.put("/reorder", requiereAuth, async (req, res) => {
+  const { ids } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ error: "Falta la lista de productos." });
+  }
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    for (let i = 0; i < ids.length; i++) {
+      await conn.query("UPDATE items SET position = ? WHERE id = ?", [i + 1, ids[i]]);
+    }
+    await conn.commit();
+    res.json({ ok: true });
+  } catch (err) {
+    await conn.rollback();
+    console.error(err);
+    res.status(500).json({ error: "Error al reordenar los productos." });
+  } finally {
+    conn.release();
+  }
+});
+
 // PUT /api/items/:id  (actualizar)
 router.put("/:id", requiereAuth, async (req, res) => {
   const { name, desc, price, cat, subcat, sizes, badge, badgeLabel, visible, images } = req.body;

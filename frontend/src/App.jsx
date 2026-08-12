@@ -310,6 +310,11 @@ function SitioPublico({ onAdmin }) {
           .cf-mobile-actions { display: flex !important; }
           .cf-mobile-menu { display: flex !important; }
           .cf-hero-emojis { display: none !important; }
+          .cf-grid-prod { grid-template-columns: repeat(2, 1fr) !important; gap: 10px !important; }
+          .cf-card-img { aspect-ratio: 1 / 1 !important; }
+        }
+        @media (max-width: 380px) {
+          .cf-grid-prod { gap: 8px !important; }
         }
       `}</style>
     </div>
@@ -366,9 +371,9 @@ function TarjetaProducto({ it, cat, onVer, onAgregar }) {
       {badge && (
         <span style={{ position: "absolute", top: 12, left: 12, zIndex: 2, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".04em", padding: "3px 10px", borderRadius: 12, background: badge.color, color: "#fff" }}>{badge.text}</span>
       )}
-      <div style={{ aspectRatio: "1 / 1", background: C.crema, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+      <div className="cf-card-img" style={{ aspectRatio: "4 / 3", background: C.crema, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
         {fotos[0] ? (
-          <img src={fotos[0]} alt={it.name} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          <img src={fotos[0]} alt={it.name} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }} />
         ) : (
           <ImageIcon size={40} color={C.borde} />
         )}
@@ -390,7 +395,7 @@ function TarjetaProducto({ it, cat, onVer, onAgregar }) {
 
 function GrillaProductos({ cats, items, onVer, onAgregar }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 16 }}>
+    <div className="cf-grid-prod" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 16 }}>
       {items.map((it) => (
         <TarjetaProducto key={it.id} it={it} cat={catById(cats, it.cat)} onVer={onVer} onAgregar={onAgregar} />
       ))}
@@ -818,9 +823,14 @@ function AdminPanel({ setLogueado, onSalir }) {
       </div>
 
       <style>{`
+        .cf-th { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: ${C.marronSoft}; font-weight: 600; }
         @media (max-width: 640px) {
           .cf-admin-sidebar { width: 64px !important; }
           .cf-admin-sidebar .cf-btn span { display: none; }
+          .cf-admin-table { min-width: 0 !important; }
+          .cf-col-hide { display: none !important; }
+          .cf-admin-table th, .cf-admin-table td { padding-left: 8px !important; padding-right: 8px !important; }
+          .cf-admin-table .cf-desc-min { max-width: 150px !important; }
         }
       `}</style>
     </div>
@@ -848,6 +858,18 @@ function AdminCatalogo() {
     () => items.filter((i) => i.name.toLowerCase().includes(busqueda.toLowerCase())),
     [items, busqueda]
   );
+  const puedeOrdenar = !busqueda;   // el reorden solo tiene sentido sin filtro
+
+  const mover = async (id, dir) => {
+    const idx = items.findIndex((x) => x.id === id);
+    const destino = idx + dir;
+    if (idx < 0 || destino < 0 || destino >= items.length) return;
+    const nuevo = [...items];
+    [nuevo[idx], nuevo[destino]] = [nuevo[destino], nuevo[idx]];
+    setItems(nuevo);
+    try { await api.reordenarItems(nuevo.map((x) => x.id)); }
+    catch (e) { window.alert(e.message); recargar(); }
+  };
 
   const toggleVisible = async (it) => {
     await api.toggleVisible(it.id, !it.visible);
@@ -885,13 +907,22 @@ function AdminCatalogo() {
           style={{ width: "100%", padding: "9px 12px 9px 36px", borderRadius: 8, border: `1px solid ${C.borde}`, fontSize: 14, background: "#fff", outline: "none" }} />
       </div>
 
-      <div style={{ background: "#fff", borderRadius: 12, border: `1px solid ${C.borde}`, overflow: "hidden" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
+      {puedeOrdenar && (
+        <div style={{ fontSize: 12, color: C.marronSoft, marginBottom: 8 }}>
+          Usá las flechas para ordenar cómo aparecen los productos en el sitio.
+        </div>
+      )}
+      <div style={{ background: "#fff", borderRadius: 12, border: `1px solid ${C.borde}`, overflowX: "auto" }}>
+        <table className="cf-admin-table" style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
           <thead>
             <tr style={{ background: C.crema }}>
-              {["Producto", "Categoria", "Tamaños", "Precio", "Visible", ""].map((h, i) => (
-                <th key={i} style={{ textAlign: i === 4 ? "center" : "left", fontSize: 11, textTransform: "uppercase", letterSpacing: ".06em", color: C.marronSoft, padding: "12px 16px", fontWeight: 600 }}>{h}</th>
-              ))}
+              <th className="cf-th" style={{ width: 34, padding: "12px 4px" }}></th>
+              <th className="cf-th" style={{ textAlign: "left", padding: "12px 16px" }}>Producto</th>
+              <th className="cf-th cf-col-hide" style={{ textAlign: "left", padding: "12px 16px" }}>Categoria</th>
+              <th className="cf-th cf-col-hide" style={{ textAlign: "left", padding: "12px 16px" }}>Tamaños</th>
+              <th className="cf-th" style={{ textAlign: "left", padding: "12px 16px" }}>Precio</th>
+              <th className="cf-th" style={{ textAlign: "center", padding: "12px 16px" }}>Visible</th>
+              <th className="cf-th" style={{ padding: "12px 16px" }}></th>
             </tr>
           </thead>
           <tbody>
@@ -899,8 +930,19 @@ function AdminCatalogo() {
               const cat = catById(cats, it.cat);
               const badge = badgeInfo(it);
               const nFotos = fotosDe(it).length;
+              const idx = items.findIndex((x) => x.id === it.id);
               return (
                 <tr key={it.id} style={{ borderTop: `1px solid ${C.crema}` }}>
+                  <td style={{ padding: "8px 4px", verticalAlign: "middle" }}>
+                    {puedeOrdenar && (
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                        <button onClick={() => mover(it.id, -1)} disabled={idx === 0} className="cf-btn" title="Subir"
+                          style={{ background: "transparent", border: "none", padding: 0, color: idx === 0 ? C.borde : C.marronSoft, cursor: idx === 0 ? "default" : "pointer", lineHeight: 0 }}><ChevronUp size={18} /></button>
+                        <button onClick={() => mover(it.id, 1)} disabled={idx === items.length - 1} className="cf-btn" title="Bajar"
+                          style={{ background: "transparent", border: "none", padding: 0, color: idx === items.length - 1 ? C.borde : C.marronSoft, cursor: idx === items.length - 1 ? "default" : "pointer", lineHeight: 0 }}><ChevronDown size={18} /></button>
+                      </div>
+                    )}
+                  </td>
                   <td style={{ padding: "12px 16px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                       <div style={{ position: "relative" }}>
@@ -916,14 +958,14 @@ function AdminCatalogo() {
                           <span style={{ fontWeight: 600, fontSize: 14, color: C.texto }}>{it.name}</span>
                           {badge && <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", padding: "1px 6px", borderRadius: 8, background: badge.color, color: "#fff" }}>{badge.text}</span>}
                         </div>
-                        <div style={{ fontSize: 12, color: C.marronSoft, marginTop: 2, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.subcat ? it.subcat + " · " : ""}{it.desc}</div>
+                        <div className="cf-desc-min" style={{ fontSize: 12, color: C.marronSoft, marginTop: 2, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.subcat ? it.subcat + " · " : ""}{it.desc}</div>
                       </div>
                     </div>
                   </td>
-                  <td style={{ padding: "12px 16px" }}>
+                  <td className="cf-col-hide" style={{ padding: "12px 16px" }}>
                     <span style={{ fontSize: 12, padding: "3px 10px", borderRadius: 12, background: cat.color + "22", color: cat.color, fontWeight: 600 }}>{cat.name}</span>
                   </td>
-                  <td style={{ padding: "12px 16px", fontSize: 12, color: C.marronSoft, maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.sizes || "—"}</td>
+                  <td className="cf-col-hide" style={{ padding: "12px 16px", fontSize: 12, color: C.marronSoft, maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.sizes || "—"}</td>
                   <td style={{ padding: "12px 16px", fontWeight: 600, color: precioNum(it.price) ? C.terra : C.marronSoft }}>{precioTxt(it.price)}</td>
                   <td style={{ padding: "12px 16px", textAlign: "center" }}>
                     <button onClick={() => toggleVisible(it)} className="cf-btn" title={it.visible ? "Ocultar" : "Mostrar"}
@@ -941,7 +983,7 @@ function AdminCatalogo() {
               );
             })}
             {filtrados.length === 0 && (
-              <tr><td colSpan={6} style={{ padding: 32, textAlign: "center", color: C.marronSoft, fontSize: 14 }}>No se encontraron productos.</td></tr>
+              <tr><td colSpan={7} style={{ padding: 32, textAlign: "center", color: C.marronSoft, fontSize: 14 }}>No se encontraron productos.</td></tr>
             )}
           </tbody>
         </table>

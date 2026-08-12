@@ -61,4 +61,6 @@ export const api = {
   toggleVisible: (id, visible) =>
     req(`/items/${id}/visible`, { method: "PATCH", body: { visible }, auth: true }),
   eliminarItem: (id) => req(`/items/${id}`, { method: "DELETE", auth: true }),
+  reordenarItems: (ids) =>
+    req("/items/reorder", { method: "PUT", body: { ids }, auth: true }),
 };
