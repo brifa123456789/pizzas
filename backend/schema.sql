@@ -86,5 +86,8 @@ INSERT INTO site_settings (setting_key, setting_value) VALUES
   ('horario',     'Mar-Dom 19:00 - 00:00'),
   ('telefono',    '+54 9 1234 5678'),
   ('whatsapp',    '5491112345678'),
-  ('instagram',   '@bellanapoli')
+  ('instagram',   '@bellanapoli'),
+  ('envio',        ''),
+  ('horaApertura', '18:00'),
+  ('horaCierre',   '22:00')
 ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value);

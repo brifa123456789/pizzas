@@ -75,6 +75,29 @@ const fmt = (n) => n.toLocaleString("es-AR");
 function precioTxt(p) {
   return precioNum(p) > 0 ? `$${p}` : "Consultar";
 }
+// "18:00" → minutos desde medianoche (con valor por defecto)
+function parseHoraMin(s, def) {
+  const m = String(s || "").match(/^(\d{1,2})(?::(\d{2}))?/);
+  if (!m) return def;
+  const h = Math.min(23, parseInt(m[1], 10) || 0);
+  const mi = Math.min(59, parseInt(m[2] || "0", 10) || 0);
+  return h * 60 + mi;
+}
+// ¿La tienda esta abierta ahora? (segun hora local del cliente)
+function estaAbierto(site) {
+  if (!site) return true;
+  const aper = parseHoraMin(site.horaApertura, 18 * 60);
+  const cierre = parseHoraMin(site.horaCierre, 22 * 60);
+  const now = new Date();
+  const t = now.getHours() * 60 + now.getMinutes();
+  if (aper === cierre) return true;              // abierto 24hs
+  if (aper < cierre) return t >= aper && t < cierre;
+  return t >= aper || t < cierre;                // horario que cruza medianoche
+}
+function horarioTxt(site) {
+  return `${site?.horaApertura || "18:00"} a ${site?.horaCierre || "22:00"}`;
+}
+
 // Resumen de precio para la tabla del admin: rango si hay precios por tamaño
 function precioResumen(it) {
   const sp = (Array.isArray(it.sizePrices) ? it.sizePrices : []).filter((s) => s && s.name);
@@ -179,6 +202,10 @@ function SitioPublico({ onAdmin }) {
 
   // ─── Acciones del carrito ───
   const agregarAlCarrito = (it, talle = "", price = null) => {
+    if (site && !estaAbierto(site)) {
+      window.alert(`Estamos cerrados. Atendemos de ${horarioTxt(site)}.`);
+      return;
+    }
     const precioFinal = price != null ? price : precioDeTalle(it, talle);
     const key = `${it.id}::${talle}`;
     setCart((prev) => {
@@ -206,6 +233,7 @@ function SitioPublico({ onAdmin }) {
   if (error) return <PantallaError error={error} />;
 
   const mostrados = filtro === "todos" ? items : items.filter((i) => i.cat === filtro);
+  const abierto = estaAbierto(site);
   const nav = [
     { id: "catalogo", label: "Catalogo" },
     { id: "nosotros", label: "Nosotros" },
@@ -257,6 +285,13 @@ function SitioPublico({ onAdmin }) {
         )}
       </header>
 
+      {/* CARTEL DE CERRADO */}
+      {!abierto && (
+        <div style={{ background: "#C6553F", color: "#fff", padding: "11px 16px", textAlign: "center", fontSize: 14, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, flexWrap: "wrap" }}>
+          <Clock size={16} /> Estamos cerrados por ahora · Atendemos de {horarioTxt(site)}
+        </div>
+      )}
+
       {/* HERO */}
       <section style={{ background: `linear-gradient(110deg, ${C.durazno} 0%, ${C.menta} 100%)`, padding: "clamp(44px,6vw,76px) clamp(16px,4vw,40px)" }}>
         <div style={{ maxWidth: 1100, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 24, flexWrap: "wrap" }}>
@@ -294,7 +329,7 @@ function SitioPublico({ onAdmin }) {
       <main style={{ maxWidth: 1100, margin: "0 auto", padding: "clamp(28px,5vw,52px) clamp(16px,4vw,40px)", minHeight: 360 }}>
         {seccion === "catalogo" && (
           <CatalogoPublico cats={cats} filtro={filtro} setFiltro={setFiltro} mostrados={mostrados}
-            onVer={setProductoVer} onAgregar={agregarAlCarrito} />
+            onVer={setProductoVer} onAgregar={agregarAlCarrito} abierto={abierto} />
         )}
         {seccion === "nosotros" && <Nosotros site={site} />}
         {seccion === "contacto" && <Contacto site={site} />}
@@ -318,13 +353,13 @@ function SitioPublico({ onAdmin }) {
 
       {/* CARRITO (offcanvas) */}
       {cartAbierto && (
-        <CarritoPanel cart={cart} site={site} onCerrar={() => setCartAbierto(false)}
+        <CarritoPanel cart={cart} site={site} abierto={abierto} onCerrar={() => setCartAbierto(false)}
           onQty={cambiarQty} onQuitar={quitarDelCarrito} />
       )}
 
       {/* MODAL DETALLE DE PRODUCTO */}
       {productoVer && (
-        <ProductoModal it={productoVer} cats={cats} onCerrar={() => setProductoVer(null)}
+        <ProductoModal it={productoVer} cats={cats} abierto={abierto} onCerrar={() => setProductoVer(null)}
           onAgregar={(talle) => { agregarAlCarrito(productoVer, talle, precioDeTalle(productoVer, talle)); setProductoVer(null); }} />
       )}
 
@@ -381,7 +416,7 @@ function FootItem({ icon, label, val }) {
 }
 
 /* ---------- Tarjeta de producto (fila tipo menu) ---------- */
-function TarjetaProducto({ it, onVer, onAgregar }) {
+function TarjetaProducto({ it, onVer, onAgregar, abierto = true }) {
   const fotos = fotosDe(it);
   const talles = tallesDe(it);
   const [sel, setSel] = useState(talles[0] || "");
@@ -418,8 +453,8 @@ function TarjetaProducto({ it, onVer, onAgregar }) {
         )}
         <div style={{ marginTop: "auto", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, paddingTop: 2 }}>
           <span style={{ fontSize: 16, fontWeight: 700, color: C.terra }}>{precioTxt(precioDeTalle(it, sel))}</span>
-          <button onClick={clickAgregar} className="cf-btn"
-            style={{ background: C.marron, color: "#fff", border: "none", padding: "8px 15px", borderRadius: 9, fontSize: 12, fontWeight: 600, display: "flex", alignItems: "center", gap: 5 }}>
+          <button onClick={clickAgregar} disabled={!abierto} className="cf-btn" title={abierto ? "" : "Cerrado"}
+            style={{ background: abierto ? C.marron : C.borde, color: "#fff", border: "none", padding: "8px 15px", borderRadius: 9, fontSize: 12, fontWeight: 600, display: "flex", alignItems: "center", gap: 5, cursor: abierto ? "pointer" : "not-allowed" }}>
             <ShoppingBag size={14} /> Agregar
           </button>
         </div>
@@ -428,17 +463,17 @@ function TarjetaProducto({ it, onVer, onAgregar }) {
   );
 }
 
-function GrillaProductos({ cats, items, onVer, onAgregar }) {
+function GrillaProductos({ cats, items, onVer, onAgregar, abierto }) {
   return (
     <div className="cf-grid-prod" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(330px, 1fr))", gap: 14 }}>
       {items.map((it) => (
-        <TarjetaProducto key={it.id} it={it} onVer={onVer} onAgregar={onAgregar} />
+        <TarjetaProducto key={it.id} it={it} onVer={onVer} onAgregar={onAgregar} abierto={abierto} />
       ))}
     </div>
   );
 }
 
-function CatalogoPublico({ cats, filtro, setFiltro, mostrados, onVer, onAgregar }) {
+function CatalogoPublico({ cats, filtro, setFiltro, mostrados, onVer, onAgregar, abierto }) {
   const grupos =
     filtro === "todos"
       ? cats.map((c) => ({ cat: c, prods: mostrados.filter((i) => i.cat === c.id) })).filter((g) => g.prods.length > 0)
@@ -465,19 +500,19 @@ function CatalogoPublico({ cats, filtro, setFiltro, mostrados, onVer, onAgregar 
                 <span style={{ fontSize: 12, color: C.marronSoft, background: C.crema, padding: "2px 9px", borderRadius: 10 }}>{prods.length}</span>
                 <span style={{ flex: 1, height: 1, background: C.borde }} />
               </div>
-              <GrillaProductos cats={cats} items={prods} onVer={onVer} onAgregar={onAgregar} />
+              <GrillaProductos cats={cats} items={prods} onVer={onVer} onAgregar={onAgregar} abierto={abierto} />
             </section>
           ))}
         </div>
       ) : (
-        <GrillaProductos cats={cats} items={mostrados} onVer={onVer} onAgregar={onAgregar} />
+        <GrillaProductos cats={cats} items={mostrados} onVer={onVer} onAgregar={onAgregar} abierto={abierto} />
       )}
     </>
   );
 }
 
 /* ---------- Modal detalle de producto (carrusel + talle) ---------- */
-function ProductoModal({ it, cats, onCerrar, onAgregar }) {
+function ProductoModal({ it, cats, onCerrar, onAgregar, abierto = true }) {
   const fotos = fotosDe(it);
   const talles = tallesDe(it);
   const cat = catById(cats, it.cat);
@@ -545,9 +580,9 @@ function ProductoModal({ it, cats, onCerrar, onAgregar }) {
             )}
 
             <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => onAgregar(talle)} className="cf-btn"
-                style={{ flex: 1, background: C.marron, color: "#fff", border: "none", padding: "13px", borderRadius: 11, fontSize: 15, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, cursor: "pointer" }}>
-                <ShoppingBag size={17} /> Agregar al carrito
+              <button onClick={() => abierto && onAgregar(talle)} disabled={!abierto} className="cf-btn"
+                style={{ flex: 1, background: abierto ? C.marron : C.borde, color: "#fff", border: "none", padding: "13px", borderRadius: 11, fontSize: 15, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, cursor: abierto ? "pointer" : "not-allowed" }}>
+                <ShoppingBag size={17} /> {abierto ? "Agregar al carrito" : "Cerrado"}
               </button>
               <button onClick={compartir} className="cf-btn" title="Compartir"
                 style={{ background: "#fff", border: `1px solid ${C.borde}`, color: C.marronSoft, padding: "0 14px", borderRadius: 11, display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 500 }}>
@@ -568,19 +603,23 @@ const carruselBtn = (lado) => ({
 });
 
 /* ---------- Carrito (offcanvas derecha) ---------- */
-function CarritoPanel({ cart, site, onCerrar, onQty, onQuitar }) {
-  const total = cart.reduce((s, x) => s + precioNum(x.price) * x.qty, 0);
+function CarritoPanel({ cart, site, abierto = true, onCerrar, onQty, onQuitar }) {
+  const subtotal = cart.reduce((s, x) => s + precioNum(x.price) * x.qty, 0);
+  const envio = precioNum(site.envio);
+  const envioTxt = envio > 0 ? `$${fmt(envio)}` : "A coordinar";
+  const total = subtotal + envio;
   const hayConsultar = cart.some((x) => precioNum(x.price) === 0);
   const totalTxt = total > 0 ? `$${fmt(total)}${hayConsultar ? " + a consultar" : ""}` : "A consultar";
 
   const finalizar = () => {
-    if (!cart.length) return;
+    if (!cart.length || !abierto) return;
     const lineas = cart.map((x) => {
       const t = x.talle ? ` (Tamaño: ${x.talle})` : "";
       const p = precioNum(x.price) > 0 ? ` — $${x.price}` : " — Consultar";
       return `• ${x.name}${t} x${x.qty}${p}`;
     });
-    const totalLinea = total > 0 ? `\n\nTotal: $${fmt(total)}${hayConsultar ? " (+ productos a consultar)" : ""}` : "";
+    const envioLinea = envio > 0 ? `\nEnvío: $${fmt(envio)}` : "";
+    const totalLinea = total > 0 ? `${envioLinea}\n\nTotal: $${fmt(total)}${hayConsultar ? " (+ productos a consultar)" : ""}` : "";
     const msg = `¡Hola ${site.nombre}! Quiero hacer este pedido:\n\n${lineas.join("\n")}${totalLinea}`;
     window.open(`https://wa.me/${site.whatsapp}?text=${encodeURIComponent(msg)}`, "_blank");
   };
@@ -630,17 +669,19 @@ function CarritoPanel({ cart, site, onCerrar, onQty, onQuitar }) {
               <span>Productos</span><span>{cart.reduce((n, x) => n + x.qty, 0)} item(s)</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.marronSoft, marginBottom: 10 }}>
-              <span>Envio</span><span>A coordinar</span>
+              <span>Envío</span><span>{envioTxt}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <span style={{ fontWeight: 700, fontSize: 15, color: C.texto }}>Total</span>
               <span style={{ fontWeight: 700, fontSize: 18, color: C.terra }}>{totalTxt}</span>
             </div>
-            <button onClick={finalizar} className="cf-btn"
-              style={{ width: "100%", background: C.wapp, color: "#fff", border: "none", padding: "13px", borderRadius: 11, fontSize: 15, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: 9 }}>
-              <MessageCircle size={19} /> Finalizar pedido por WhatsApp
+            <button onClick={finalizar} disabled={!abierto} className="cf-btn"
+              style={{ width: "100%", background: abierto ? C.wapp : C.borde, color: "#fff", border: "none", padding: "13px", borderRadius: 11, fontSize: 15, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: 9, cursor: abierto ? "pointer" : "not-allowed" }}>
+              <MessageCircle size={19} /> {abierto ? "Finalizar pedido por WhatsApp" : "Cerrado por ahora"}
             </button>
-            <div style={{ textAlign: "center", fontSize: 11, color: C.marronSoft, marginTop: 8 }}>🔒 Tu pedido se envia de forma segura</div>
+            <div style={{ textAlign: "center", fontSize: 11, color: C.marronSoft, marginTop: 8 }}>
+              {abierto ? "🔒 Tu pedido se envia de forma segura" : `Atendemos de ${horarioTxt(site)}`}
+            </div>
           </div>
         )}
       </aside>
@@ -816,6 +857,7 @@ function AdminPanel({ setLogueado, onSalir }) {
     { grupo: "Sitio", items: [
       { id: "inicio", label: "Inicio", icon: <Home size={17} /> },
       { id: "contacto", label: "Contacto", icon: <MapPin size={17} /> },
+      { id: "pedidos", label: "Envío y horario", icon: <Clock size={17} /> },
     ]},
   ];
 
@@ -851,6 +893,7 @@ function AdminPanel({ setLogueado, onSalir }) {
           {seccion === "categorias" && <AdminCategorias />}
           {seccion === "inicio" && <AdminSite campos={["nombre", "eslogan", "subtitulo", "descripcion"]} titulo="Pagina de inicio" sub="Textos que ven tus clientes al entrar" onSaved={setSite} />}
           {seccion === "contacto" && <AdminSite campos={["direccion", "horario", "telefono", "whatsapp", "instagram"]} titulo="Datos de contacto" sub="Direccion, horario y redes" onSaved={setSite} />}
+          {seccion === "pedidos" && <AdminSite campos={["envio", "horaApertura", "horaCierre"]} titulo="Envío y horario de atención" sub="Costo de envío y en qué horario se puede pedir" onSaved={setSite} />}
         </main>
       </div>
 
@@ -1316,13 +1359,25 @@ function AdminSite({ campos, titulo, sub, onSaved }) {
     nombre: "Nombre de la tienda", eslogan: "Eslogan principal", subtitulo: "Subtitulo",
     descripcion: "Descripcion (Nosotros)", direccion: "Direccion", horario: "Horario",
     telefono: "Telefono", whatsapp: "WhatsApp", instagram: "Instagram",
+    envio: "Costo de envío", horaApertura: "Hora de apertura", horaCierre: "Hora de cierre",
   };
   const hints = {
     eslogan: "Separa con una coma para el efecto de color: 'Pizza a la piedra, hecha como en casa.'",
     whatsapp: "Solo numeros con codigo de pais, sin + ni espacios. Ej: 5491112345678",
+    envio: "Solo el número. Vacío = 'A coordinar'. Ej: 1.500",
+    horaApertura: "Formato 24hs. Ej: 18:00. Antes de esta hora la tienda aparece cerrada.",
+    horaCierre: "Formato 24hs. Ej: 22:00. Después de esta hora no se puede pedir.",
   };
 
-  useEffect(() => { api.getSite().then(setForm); }, []);
+  useEffect(() => {
+    api.getSite().then((s) => {
+      const conDefaults = { ...s };
+      if (campos.includes("horaApertura") && !conDefaults.horaApertura) conDefaults.horaApertura = "18:00";
+      if (campos.includes("horaCierre") && !conDefaults.horaCierre) conDefaults.horaCierre = "22:00";
+      setForm(conDefaults);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const set = (k, v) => { setForm((f) => ({ ...f, [k]: v })); setGuardado(false); };
 
   const guardar = async () => {
