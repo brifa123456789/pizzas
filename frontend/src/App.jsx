@@ -527,48 +527,46 @@ function CatalogoPublico({ cats, filtro, setFiltro, mostrados, onVer, onAgregar,
       ? cats.map((c) => ({ cat: c, prods: mostrados.filter((i) => i.cat === c.id) })).filter((g) => g.prods.length > 0)
       : null;
 
-  // Animacion scroll-reveal (GSAP + ScrollTrigger), a PRUEBA DE FALLOS:
-  // las tarjetas se ven por defecto; GSAP solo agrega el movimiento. Si algo
-  // falla, el navegador pide menos animacion, o un trigger no dispara, igual se muestran.
+  // Scroll-reveal estilo Apple (GSAP + ScrollTrigger con SCRUB): cada tarjeta
+  // se va revelando ATADA al scroll a medida que bajas. A PRUEBA DE FALLOS:
+  // por defecto las tarjetas se ven; si algo falla o se pide menos animacion, se muestran igual.
   const sig = mostrados.map((i) => i.id).join(",");
   useEffect(() => {
     let cards = [];
     try { cards = gsap.utils.toArray(".cf-reveal"); } catch { return; }
     if (!cards.length) return;
 
-    const mostrarTodo = () => { try { gsap.set(cards, { opacity: 1, y: 0, clearProps: "transform" }); } catch {} };
+    const mostrarTodo = () => { try { gsap.set(cards, { opacity: 1, y: 0, clearProps: "all" }); } catch {} };
 
     const reducido = typeof window !== "undefined" && window.matchMedia
       && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reducido) { mostrarTodo(); return; }
 
-    let triggers = [];
-    let fallback;
+    let ctx;
     try {
-      gsap.set(cards, { opacity: 0, y: 26 });
-      triggers = ScrollTrigger.batch(".cf-reveal", {
-        start: "top 92%",
-        onEnter: (batch) =>
-          gsap.to(batch, { opacity: 1, y: 0, duration: 0.55, stagger: 0.09, ease: "power2.out", overwrite: true }),
+      ctx = gsap.context(() => {
+        cards.forEach((card) => {
+          gsap.fromTo(
+            card,
+            { opacity: 0, y: 60, scale: 0.97 },
+            {
+              opacity: 1, y: 0, scale: 1, ease: "none",
+              scrollTrigger: {
+                trigger: card,
+                start: "top 90%",   // empieza a aparecer cuando entra por abajo
+                end: "top 60%",     // queda completa un poco mas arriba
+                scrub: 0.6,          // atado al scroll, con leve suavizado (Apple-like)
+              },
+            }
+          );
+        });
       });
       ScrollTrigger.refresh();
-      // Red de seguridad: si alguna tarjeta quedo oculta, se muestra igual.
-      fallback = setTimeout(() => {
-        try {
-          cards.forEach((el) => {
-            if (parseFloat(getComputedStyle(el).opacity) < 0.05) gsap.to(el, { opacity: 1, y: 0, duration: 0.3 });
-          });
-        } catch {}
-      }, 1500);
     } catch {
       mostrarTodo();
     }
 
-    return () => {
-      clearTimeout(fallback);
-      try { triggers.forEach((t) => t.kill()); } catch {}
-      try { gsap.set(cards, { clearProps: "opacity,transform" }); } catch {}
-    };
+    return () => { try { ctx && ctx.revert(); } catch { mostrarTodo(); } };
   }, [sig]);
 
   return (
