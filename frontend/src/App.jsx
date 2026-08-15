@@ -3,7 +3,8 @@ import {
   Pizza, MapPin, Clock, Phone, Instagram, Menu as MenuIcon, X,
   Plus, Minus, Pencil, Trash2, Eye, EyeOff, Search, LogOut, Lock,
   ShoppingBag, ShoppingCart, Tags, Home, Check, ChevronLeft, ChevronRight,
-  Loader2, Image as ImageIcon, ChevronUp, ChevronDown, Ruler, MessageCircle, Share2
+  Loader2, Image as ImageIcon, ChevronUp, ChevronDown, Ruler, MessageCircle, Share2,
+  Bike, Store
 } from "lucide-react";
 import { api, getToken, setToken, clearToken } from "./api.js";
 import { gsap } from "gsap";
@@ -696,24 +697,36 @@ const carruselBtn = (lado) => ({
 function CarritoPanel({ cart, site, abierto = true, onCerrar, onQty, onQuitar }) {
   const subtotal = cart.reduce((s, x) => s + precioNum(x.price) * x.qty, 0);
   const envio = precioNum(site.envio);
-  const envioTxt = envio > 0 ? `$${fmt(envio)}` : "A coordinar";
-  const total = subtotal + envio;
-  const hayConsultar = cart.some((x) => precioNum(x.price) === 0);
-  const totalTxt = total > 0 ? `$${fmt(total)}${hayConsultar ? " + a consultar" : ""}` : "A consultar";
   const horarios = listaHorarios(site);
   const [hora, setHora] = useState(horarios[0] || "");
+  const [entrega, setEntrega] = useState("delivery"); // "delivery" | "retiro"
+  const [direccion, setDireccion] = useState("");
+
+  const esDelivery = entrega === "delivery";
+  const envioAplica = esDelivery ? envio : 0;
+  const envioTxt = !esDelivery ? "Sin cargo" : (envio > 0 ? `$${fmt(envio)}` : "A coordinar");
+  const total = subtotal + envioAplica;
+  const hayConsultar = cart.some((x) => precioNum(x.price) === 0);
+  const totalTxt = total > 0 ? `$${fmt(total)}${hayConsultar ? " + a consultar" : ""}` : "A consultar";
 
   const finalizar = () => {
     if (!cart.length || !abierto) return;
+    if (esDelivery && !direccion.trim()) {
+      window.alert("Escribí la dirección para el envío.");
+      return;
+    }
     const lineas = cart.map((x) => {
       const t = x.talle ? ` (Tamaño: ${x.talle})` : "";
       const p = precioNum(x.price) > 0 ? ` — $${x.price}` : " — Consultar";
       return `• ${x.name}${t} x${x.qty}${p}`;
     });
-    const envioLinea = envio > 0 ? `\nEnvío: $${fmt(envio)}` : "";
+    const entregaLinea = esDelivery
+      ? `\n\n🛵 Envío a domicilio\n📍 Dirección: ${direccion.trim()}`
+      : `\n\n🏬 Retiro en el local`;
+    const envioLinea = esDelivery && envio > 0 ? `\nEnvío: $${fmt(envio)}` : "";
     const totalLinea = total > 0 ? `${envioLinea}\n\nTotal: $${fmt(total)}${hayConsultar ? " (+ productos a consultar)" : ""}` : "";
-    const horaLinea = hora ? `\n\n🕒 Horario del pedido: ${hora}` : "";
-    const msg = `¡Hola ${site.nombre}! Quiero hacer este pedido:\n\n${lineas.join("\n")}${totalLinea}${horaLinea}`;
+    const horaLinea = hora ? `\n🕒 Horario del pedido: ${hora}` : "";
+    const msg = `¡Hola ${site.nombre}! Quiero hacer este pedido:\n\n${lineas.join("\n")}${entregaLinea}${totalLinea}${horaLinea}`;
     window.open(`https://wa.me/${site.whatsapp}?text=${encodeURIComponent(msg)}`, "_blank");
   };
 
@@ -758,6 +771,29 @@ function CarritoPanel({ cart, site, abierto = true, onCerrar, onQty, onQuitar })
 
         {cart.length > 0 && (
           <div style={{ borderTop: `1px solid ${C.borde}`, padding: 20 }}>
+            {/* Entrega: delivery o retiro */}
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: C.texto, marginBottom: 6, display: "block" }}>¿Cómo lo querés recibir?</label>
+              <div style={{ display: "flex", gap: 8 }}>
+                {[
+                  { id: "delivery", label: "Envío", icon: <Bike size={16} /> },
+                  { id: "retiro", label: "Retiro", icon: <Store size={16} /> },
+                ].map((op) => {
+                  const activo = entrega === op.id;
+                  return (
+                    <button key={op.id} onClick={() => setEntrega(op.id)} className="cf-btn"
+                      style={{ flex: 1, padding: "9px 10px", borderRadius: 9, fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, border: `1.5px solid ${activo ? C.terra : C.borde}`, background: activo ? C.terra : "#fff", color: activo ? "#fff" : C.texto }}>
+                      {op.icon} {op.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {esDelivery && (
+                <input value={direccion} onChange={(e) => setDireccion(e.target.value)} placeholder="Dirección de entrega (calle, número, piso...)"
+                  style={{ width: "100%", marginTop: 10, padding: "10px 12px", borderRadius: 8, border: `1px solid ${C.borde}`, fontSize: 14, background: "#fff", outline: "none", color: C.texto }} />
+              )}
+            </div>
+
             <div style={{ marginBottom: 14 }}>
               <label style={{ fontSize: 12, fontWeight: 600, color: C.texto, display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
                 <Clock size={14} color={C.terra} /> ¿Para qué hora lo querés?
@@ -772,7 +808,7 @@ function CarritoPanel({ cart, site, abierto = true, onCerrar, onQty, onQuitar })
               <span>Productos</span><span>{cart.reduce((n, x) => n + x.qty, 0)} item(s)</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.marronSoft, marginBottom: 10 }}>
-              <span>Envío</span><span>{envioTxt}</span>
+              <span>{esDelivery ? "Envío" : "Retiro en el local"}</span><span>{envioTxt}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <span style={{ fontWeight: 700, fontSize: 15, color: C.texto }}>Total</span>
