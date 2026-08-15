@@ -13,17 +13,17 @@ import { api, getToken, setToken, clearToken } from "./api.js";
    ============================================================ */
 
 const C = {
-  crema: "#FFFDF4",      // fondo de la pagina (crema muy claro)
-  cremaSoft: "#FFFFFF",  // tarjetas / header
-  durazno: "#FFEDAF",    // hero (izquierda) amarillo claro
-  menta: "#FFF7DA",      // hero (derecha) crema calido
-  terra: "#C08A17",      // acento principal (dorado horneado)
-  terraSoft: "#F2DFA6",
-  marron: "#5A3E22",     // botones oscuros / texto fuerte (espresso)
-  marronSoft: "#8A745A", // texto suave
-  verde: "#6F9A3E",      // badge "Nuevo" (albahaca)
-  borde: "#F0E6C8",
-  texto: "#453626",
+  crema: "#F7F1E1",      // fondo de la pagina (crema del logo)
+  cremaSoft: "#FFFDF8",  // tarjetas / header
+  durazno: "#F1D9BC",    // hero (izquierda) tan calido
+  menta: "#FAEED7",      // hero (derecha) crema
+  terra: "#B85C1E",      // acento principal (naranja rust del logo)
+  terraSoft: "#E7C9AC",
+  marron: "#4A2E20",     // botones oscuros / texto fuerte (marron del logo)
+  marronSoft: "#8B7159", // texto suave
+  verde: "#6F9A3E",      // color de exito (guardado)
+  borde: "#EBDDC4",
+  texto: "#3E2A1E",
   wapp: "#25D366",       // verde WhatsApp
   wappDark: "#1EA855",
 };
@@ -110,6 +110,10 @@ function estaAbierto(site) {
 }
 function horarioTxt(site) {
   return `${site?.horaApertura || "18:00"} a ${site?.horaCierre || "22:00"}`;
+}
+// Opciones de horario para retirar/recibir el pedido (gestionadas desde el admin)
+function listaHorarios(site) {
+  return String(site?.horariosPedido || "").split(",").map((s) => s.trim()).filter(Boolean);
 }
 
 // Enlaces de contacto
@@ -650,6 +654,8 @@ function CarritoPanel({ cart, site, abierto = true, onCerrar, onQty, onQuitar })
   const total = subtotal + envio;
   const hayConsultar = cart.some((x) => precioNum(x.price) === 0);
   const totalTxt = total > 0 ? `$${fmt(total)}${hayConsultar ? " + a consultar" : ""}` : "A consultar";
+  const horarios = listaHorarios(site);
+  const [hora, setHora] = useState("Lo antes posible");
 
   const finalizar = () => {
     if (!cart.length || !abierto) return;
@@ -660,7 +666,8 @@ function CarritoPanel({ cart, site, abierto = true, onCerrar, onQty, onQuitar })
     });
     const envioLinea = envio > 0 ? `\nEnvío: $${fmt(envio)}` : "";
     const totalLinea = total > 0 ? `${envioLinea}\n\nTotal: $${fmt(total)}${hayConsultar ? " (+ productos a consultar)" : ""}` : "";
-    const msg = `¡Hola ${site.nombre}! Quiero hacer este pedido:\n\n${lineas.join("\n")}${totalLinea}`;
+    const horaLinea = hora ? `\n\n🕒 Horario del pedido: ${hora}` : "";
+    const msg = `¡Hola ${site.nombre}! Quiero hacer este pedido:\n\n${lineas.join("\n")}${totalLinea}${horaLinea}`;
     window.open(`https://wa.me/${site.whatsapp}?text=${encodeURIComponent(msg)}`, "_blank");
   };
 
@@ -705,6 +712,16 @@ function CarritoPanel({ cart, site, abierto = true, onCerrar, onQty, onQuitar })
 
         {cart.length > 0 && (
           <div style={{ borderTop: `1px solid ${C.borde}`, padding: 20 }}>
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: C.texto, display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                <Clock size={14} color={C.terra} /> ¿Para qué hora lo querés?
+              </label>
+              <select value={hora} onChange={(e) => setHora(e.target.value)}
+                style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: `1px solid ${C.borde}`, fontSize: 14, background: "#fff", outline: "none", color: C.texto }}>
+                <option>Lo antes posible</option>
+                {horarios.map((h) => <option key={h} value={h}>{h}</option>)}
+              </select>
+            </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.marronSoft, marginBottom: 6 }}>
               <span>Productos</span><span>{cart.reduce((n, x) => n + x.qty, 0)} item(s)</span>
             </div>
@@ -940,7 +957,7 @@ function AdminPanel({ setLogueado, onSalir }) {
           {seccion === "categorias" && <AdminCategorias />}
           {seccion === "inicio" && <AdminSite campos={["nombre", "eslogan", "subtitulo", "descripcion"]} titulo="Pagina de inicio" sub="Textos que ven tus clientes al entrar" onSaved={setSite} />}
           {seccion === "contacto" && <AdminSite campos={["direccion", "horario", "telefono", "whatsapp", "instagram"]} titulo="Datos de contacto" sub="Direccion, horario y redes" onSaved={setSite} />}
-          {seccion === "pedidos" && <AdminSite campos={["envio", "horaApertura", "horaCierre", "diasCerrado"]} titulo="Envío y horario de atención" sub="Costo de envío, horario y días de cierre" onSaved={setSite} />}
+          {seccion === "pedidos" && <AdminSite campos={["envio", "horaApertura", "horaCierre", "diasCerrado", "horariosPedido"]} titulo="Envío y horario de atención" sub="Envío, horario, días de cierre y horarios de pedido" onSaved={setSite} />}
         </main>
       </div>
 
@@ -1407,7 +1424,7 @@ function AdminSite({ campos, titulo, sub, onSaved }) {
     descripcion: "Descripcion (Nosotros)", direccion: "Direccion", horario: "Horario",
     telefono: "Telefono", whatsapp: "WhatsApp", instagram: "Instagram",
     envio: "Costo de envío", horaApertura: "Hora de apertura", horaCierre: "Hora de cierre",
-    diasCerrado: "Días que cierra",
+    diasCerrado: "Días que cierra", horariosPedido: "Horarios para elegir en el pedido",
   };
   const hints = {
     eslogan: "Separa con una coma para el efecto de color: 'Pizza a la piedra, hecha como en casa.'",
@@ -1416,6 +1433,7 @@ function AdminSite({ campos, titulo, sub, onSaved }) {
     horaApertura: "Formato 24hs. Ej: 18:00. Antes de esta hora la tienda aparece cerrada.",
     horaCierre: "Formato 24hs. Ej: 22:00. Después de esta hora no se puede pedir.",
     diasCerrado: "Marcá los días en que la tienda no atiende (ej: Lunes).",
+    horariosPedido: "Separá con comas los horarios que el cliente puede elegir. Ej: 19:00, 19:30, 20:00, 20:30, 21:00. (Siempre se agrega 'Lo antes posible').",
   };
 
   useEffect(() => {

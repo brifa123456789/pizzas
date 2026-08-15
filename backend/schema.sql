@@ -88,7 +88,8 @@ INSERT IGNORE INTO site_settings (setting_key, setting_value) VALUES
   ('telefono',    '+54 9 1234 5678'),
   ('whatsapp',    '5491112345678'),
   ('instagram',   '@bellanapoli'),
-  ('envio',        ''),
-  ('horaApertura', '18:00'),
-  ('horaCierre',   '22:00'),
-  ('diasCerrado',  '');
+  ('envio',          ''),
+  ('horaApertura',   '18:00'),
+  ('horaCierre',     '22:00'),
+  ('diasCerrado',    ''),
+  ('horariosPedido', '19:00, 19:30, 20:00, 20:30, 21:00, 21:30');
