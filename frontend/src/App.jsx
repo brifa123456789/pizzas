@@ -6,6 +6,10 @@ import {
   Loader2, Image as ImageIcon, ChevronUp, ChevronDown, Ruler, MessageCircle, Share2
 } from "lucide-react";
 import { api, getToken, setToken, clearToken } from "./api.js";
+import { gsap } from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
+
+try { gsap.registerPlugin(ScrollTrigger); } catch { /* si falla, el sitio funciona igual sin animacion */ }
 
 /* ============================================================
    BELLA NAPOLI — Frontend (React + API Node/MySQL/TiDB)
@@ -471,7 +475,7 @@ function TarjetaProducto({ it, onVer, onAgregar, abierto = true }) {
   };
 
   return (
-    <div className="cf-card cf-menu-row" onClick={() => onVer(it)}
+    <div className="cf-card cf-menu-row cf-reveal" onClick={() => onVer(it)}
       style={{ background: C.cremaSoft, borderRadius: 16, overflow: "hidden", border: `1px solid ${C.borde}`, cursor: "pointer", display: "flex", gap: 14, padding: 12 }}>
       <div style={{ width: 104, height: 104, flexShrink: 0, borderRadius: 12, overflow: "hidden", background: C.crema, display: "flex", alignItems: "center", justifyContent: "center" }}>
         {fotos[0] ? (
@@ -522,6 +526,50 @@ function CatalogoPublico({ cats, filtro, setFiltro, mostrados, onVer, onAgregar,
     filtro === "todos"
       ? cats.map((c) => ({ cat: c, prods: mostrados.filter((i) => i.cat === c.id) })).filter((g) => g.prods.length > 0)
       : null;
+
+  // Animacion scroll-reveal (GSAP + ScrollTrigger), a PRUEBA DE FALLOS:
+  // las tarjetas se ven por defecto; GSAP solo agrega el movimiento. Si algo
+  // falla, el navegador pide menos animacion, o un trigger no dispara, igual se muestran.
+  const sig = mostrados.map((i) => i.id).join(",");
+  useEffect(() => {
+    let cards = [];
+    try { cards = gsap.utils.toArray(".cf-reveal"); } catch { return; }
+    if (!cards.length) return;
+
+    const mostrarTodo = () => { try { gsap.set(cards, { opacity: 1, y: 0, clearProps: "transform" }); } catch {} };
+
+    const reducido = typeof window !== "undefined" && window.matchMedia
+      && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reducido) { mostrarTodo(); return; }
+
+    let triggers = [];
+    let fallback;
+    try {
+      gsap.set(cards, { opacity: 0, y: 26 });
+      triggers = ScrollTrigger.batch(".cf-reveal", {
+        start: "top 92%",
+        onEnter: (batch) =>
+          gsap.to(batch, { opacity: 1, y: 0, duration: 0.55, stagger: 0.09, ease: "power2.out", overwrite: true }),
+      });
+      ScrollTrigger.refresh();
+      // Red de seguridad: si alguna tarjeta quedo oculta, se muestra igual.
+      fallback = setTimeout(() => {
+        try {
+          cards.forEach((el) => {
+            if (parseFloat(getComputedStyle(el).opacity) < 0.05) gsap.to(el, { opacity: 1, y: 0, duration: 0.3 });
+          });
+        } catch {}
+      }, 1500);
+    } catch {
+      mostrarTodo();
+    }
+
+    return () => {
+      clearTimeout(fallback);
+      try { triggers.forEach((t) => t.kill()); } catch {}
+      try { gsap.set(cards, { clearProps: "opacity,transform" }); } catch {}
+    };
+  }, [sig]);
 
   return (
     <>
@@ -655,7 +703,7 @@ function CarritoPanel({ cart, site, abierto = true, onCerrar, onQty, onQuitar })
   const hayConsultar = cart.some((x) => precioNum(x.price) === 0);
   const totalTxt = total > 0 ? `$${fmt(total)}${hayConsultar ? " + a consultar" : ""}` : "A consultar";
   const horarios = listaHorarios(site);
-  const [hora, setHora] = useState("Lo antes posible");
+  const [hora, setHora] = useState(horarios[0] || "");
 
   const finalizar = () => {
     if (!cart.length || !abierto) return;
@@ -718,7 +766,7 @@ function CarritoPanel({ cart, site, abierto = true, onCerrar, onQty, onQuitar })
               </label>
               <select value={hora} onChange={(e) => setHora(e.target.value)}
                 style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: `1px solid ${C.borde}`, fontSize: 14, background: "#fff", outline: "none", color: C.texto }}>
-                <option>Lo antes posible</option>
+                {horarios.length === 0 && <option value="">A coordinar</option>}
                 {horarios.map((h) => <option key={h} value={h}>{h}</option>)}
               </select>
             </div>
