@@ -186,7 +186,16 @@ function FontsAndBase() {
       .cf-btn:hover { filter: brightness(1.06); }
       .cf-card { transition: transform .2s ease, box-shadow .2s ease; }
       .cf-card:hover { transform: translateY(-3px); box-shadow: 0 12px 30px rgba(120,80,50,.14); }
+      /* En touch no hay hover real: evita que las tarjetas "salten" mientras deslizas */
+      @media (hover: none) {
+        .cf-card:hover { transform: none; box-shadow: none; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .cf-card { transition: none; }
+      }
       .cf-navlink { transition: color .18s ease; cursor: pointer; }
+      .cf-pixela { transition: opacity .18s ease; opacity: .9; }
+      .cf-pixela:hover { opacity: 1; }
       .cf-spin { animation: cfspin 1s linear infinite; }
       @keyframes cfspin { to { transform: rotate(360deg); } }
       @keyframes cfslide { from { transform: translateX(100%); } to { transform: translateX(0); } }
@@ -392,8 +401,9 @@ function SitioPublico({ onAdmin }) {
           <FootItem icon={<Instagram size={16} />} label="Seguinos" val={site.instagram} href={igUrl(site.instagram)} externo />
           <FootItem icon={<Clock size={16} />} label="Horario" val={site.horario} />
         </div>
-        <div style={{ maxWidth: 1100, margin: "24px auto 0", paddingTop: 16, borderTop: "1px solid rgba(252,247,240,.14)", textAlign: "center" }}>
+        <div style={{ maxWidth: 1100, margin: "24px auto 0", paddingTop: 16, borderTop: "1px solid rgba(252,247,240,.14)", display: "flex", flexDirection: "column", alignItems: "center", gap: 13, textAlign: "center" }}>
           <span style={{ color: "rgba(252,247,240,.4)", fontSize: 12 }}>© {new Date().getFullYear()} {site.nombre} · Todos los derechos reservados</span>
+          <CreditoPixela />
         </div>
       </footer>
 
@@ -528,9 +538,9 @@ function CatalogoPublico({ cats, filtro, setFiltro, mostrados, onVer, onAgregar,
       ? cats.map((c) => ({ cat: c, prods: mostrados.filter((i) => i.cat === c.id) })).filter((g) => g.prods.length > 0)
       : null;
 
-  // Scroll-reveal estilo Apple (GSAP + ScrollTrigger con SCRUB): cada tarjeta
-  // se va revelando ATADA al scroll a medida que bajas. A PRUEBA DE FALLOS:
-  // por defecto las tarjetas se ven; si algo falla o se pide menos animacion, se muestran igual.
+  // Scroll-reveal suave y discreto: la tarjeta hace un fade corto al entrar y
+  // NO vuelve a moverse (sin scrub, asi el scroll se siente fluido y no "tironea").
+  // A PRUEBA DE FALLOS: si algo falla o se pide menos animacion, las tarjetas se ven igual.
   const sig = mostrados.map((i) => i.id).join(",");
   useEffect(() => {
     let cards = [];
@@ -543,31 +553,41 @@ function CatalogoPublico({ cats, filtro, setFiltro, mostrados, onVer, onAgregar,
       && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reducido) { mostrarTodo(); return; }
 
-    let ctx;
+    let ctx, red;
     try {
       ctx = gsap.context(() => {
-        cards.forEach((card) => {
-          gsap.fromTo(
-            card,
-            { opacity: 0, y: 60, scale: 0.97 },
-            {
-              opacity: 1, y: 0, scale: 1, ease: "none",
-              scrollTrigger: {
-                trigger: card,
-                start: "top 90%",   // empieza a aparecer cuando entra por abajo
-                end: "top 60%",     // queda completa un poco mas arriba
-                scrub: 0.6,          // atado al scroll, con leve suavizado (Apple-like)
-              },
-            }
-          );
+        gsap.set(cards, { opacity: 0, y: 12 });
+        ScrollTrigger.batch(cards, {
+          start: "top 96%",     // entra apenas asoma por abajo
+          once: true,           // se revela una sola vez: al seguir bajando no se mueve mas
+          onEnter: (lote) =>
+            gsap.to(lote, {
+              opacity: 1, y: 0, duration: 0.45, ease: "power2.out",
+              stagger: 0.05, overwrite: true, clearProps: "transform",
+            }),
         });
       });
       ScrollTrigger.refresh();
+      // Red de seguridad: si las tarjetas que YA estan a la vista siguen invisibles,
+      // ScrollTrigger no esta funcionando -> mostramos todo antes que dejar la pagina vacia.
+      red = setTimeout(() => {
+        try {
+          const enPantalla = cards.filter((c) => {
+            const r = c.getBoundingClientRect();
+            return r.top < window.innerHeight && r.bottom > 0;
+          });
+          const algunaVisible = enPantalla.some((c) => parseFloat(getComputedStyle(c).opacity) > 0.05);
+          if (enPantalla.length && !algunaVisible) mostrarTodo();
+        } catch { mostrarTodo(); }
+      }, 2500);
     } catch {
       mostrarTodo();
     }
 
-    return () => { try { ctx && ctx.revert(); } catch { mostrarTodo(); } };
+    return () => {
+      clearTimeout(red);
+      try { ctx && ctx.revert(); } catch { mostrarTodo(); }
+    };
   }, [sig]);
 
   return (
@@ -722,7 +742,7 @@ function CarritoPanel({ cart, site, abierto = true, onCerrar, onQty, onQuitar })
     });
     const entregaLinea = esDelivery
       ? `\n\n🛵 Envío a domicilio\n📍 Dirección: ${direccion.trim()}`
-      : `\n\n🏬 Retiro en el local`;
+      : `\n\n🏬 Retiro en el local${site.direccion ? `\n📍 ${site.direccion}` : ""}`;
     const envioLinea = esDelivery && envio > 0 ? `\nEnvío: $${fmt(envio)}` : "";
     const totalLinea = total > 0 ? `${envioLinea}\n\nTotal: $${fmt(total)}${hayConsultar ? " (+ productos a consultar)" : ""}` : "";
     const horaLinea = hora ? `\n🕒 Horario del pedido: ${hora}` : "";
@@ -788,9 +808,27 @@ function CarritoPanel({ cart, site, abierto = true, onCerrar, onQty, onQuitar })
                   );
                 })}
               </div>
-              {esDelivery && (
+              {esDelivery ? (
                 <input value={direccion} onChange={(e) => setDireccion(e.target.value)} placeholder="Dirección de entrega (calle, número, piso...)"
                   style={{ width: "100%", marginTop: 10, padding: "10px 12px", borderRadius: 8, border: `1px solid ${C.borde}`, fontSize: 14, background: "#fff", outline: "none", color: C.texto }} />
+              ) : (
+                site.direccion ? (
+                  <div style={{ marginTop: 10, display: "flex", gap: 9, alignItems: "flex-start", background: C.crema, border: `1px solid ${C.borde}`, borderRadius: 8, padding: "10px 12px" }}>
+                    <MapPin size={16} color={C.terra} style={{ flexShrink: 0, marginTop: 2 }} />
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.texto }}>Retirás en el local</div>
+                      <div style={{ fontSize: 13, color: C.marronSoft, lineHeight: 1.35, marginTop: 1 }}>{site.direccion}</div>
+                      {site.horario && (
+                        <div style={{ fontSize: 11.5, color: C.marronSoft, marginTop: 3 }}>Horario: {site.horario}</div>
+                      )}
+                      <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(site.direccion)}`}
+                        target="_blank" rel="noreferrer"
+                        style={{ display: "inline-block", marginTop: 6, fontSize: 12, fontWeight: 600, color: C.terra, textDecoration: "none" }}>
+                        Cómo llegar →
+                      </a>
+                    </div>
+                  </div>
+                ) : null
               )}
             </div>
 
@@ -829,24 +867,62 @@ function CarritoPanel({ cart, site, abierto = true, onCerrar, onQty, onQuitar })
 }
 const qtyBtn = { background: "transparent", border: "none", color: C.marron, display: "flex", alignItems: "center", cursor: "pointer", padding: 0 };
 
+/* ---------- Credito del estudio (pie del sitio) ----------
+   El logo vive en public/pixela.svg: para cambiarlo, reemplaza ese archivo. */
+function CreditoPixela() {
+  return (
+    <a href="https://pixelaweb.netlify.app" target="_blank" rel="noreferrer" className="cf-pixela"
+      title="Pixela — Diseño y desarrollo web"
+      style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", flexWrap: "wrap", gap: 9, textDecoration: "none" }}>
+      <span style={{ color: "rgba(252,247,240,.38)", fontSize: 10, fontWeight: 600, letterSpacing: ".14em", textTransform: "uppercase" }}>
+        Diseño &amp; desarrollo por
+      </span>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+        <img src="/pixela.svg" alt="" width={20} height={20} style={{ display: "block", borderRadius: 5 }}
+          onError={(e) => { e.currentTarget.style.display = "none"; }} />
+        <span className="ff-display" style={{ color: "rgba(252,247,240,.88)", fontSize: 15, fontWeight: 600 }}>Pixela</span>
+      </span>
+    </a>
+  );
+}
+
 /* ---------- Widget flotante de WhatsApp ---------- */
 function WhatsappWidget({ site }) {
   const [abierto, setAbierto] = useState(true);
+  const timer = useRef(null);
   const link = `https://wa.me/${site.whatsapp}`;
+
+  // El globo se muestra al entrar y se cierra solo a los 5 segundos.
+  // Si el visitante lo toca antes, se cancela el cierre automatico.
+  const cancelarAuto = () => {
+    if (timer.current) { clearTimeout(timer.current); timer.current = null; }
+  };
+  useEffect(() => {
+    timer.current = setTimeout(() => { timer.current = null; setAbierto(false); }, 5000);
+    return cancelarAuto;
+  }, []);
+
   return (
     <>
-      {abierto && (
-        <div style={{ position: "fixed", right: 20, bottom: 90, width: 260, background: "#fff", borderRadius: 16, boxShadow: "0 12px 40px rgba(0,0,0,.2)", padding: 18, zIndex: 60, animation: "cffade .2s ease" }}>
-          <button onClick={() => setAbierto(false)} className="cf-btn" style={{ position: "absolute", top: 10, right: 10, background: "transparent", border: "none", color: C.marronSoft }}><X size={16} /></button>
-          <div style={{ fontWeight: 700, fontSize: 15, color: C.texto }}>¿Necesitas ayuda?</div>
-          <div style={{ fontSize: 13, color: C.marronSoft, margin: "4px 0 12px" }}>Chatea con nosotros</div>
-          <a href={link} target="_blank" rel="noreferrer" className="cf-btn"
-            style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: C.wapp, color: "#fff", textDecoration: "none", padding: "10px", borderRadius: 10, fontSize: 14, fontWeight: 600 }}>
-            <MessageCircle size={17} /> Abrir WhatsApp
-          </a>
-        </div>
-      )}
-      <button onClick={() => setAbierto((v) => !v)} className="cf-btn" title="WhatsApp"
+      <div aria-hidden={!abierto}
+        style={{
+          position: "fixed", right: 20, bottom: 90, width: 260, background: "#fff", borderRadius: 16,
+          boxShadow: "0 12px 40px rgba(0,0,0,.2)", padding: 18, zIndex: 60,
+          opacity: abierto ? 1 : 0,
+          transform: abierto ? "translateY(0) scale(1)" : "translateY(10px) scale(.96)",
+          visibility: abierto ? "visible" : "hidden",
+          pointerEvents: abierto ? "auto" : "none",
+          transition: "opacity .3s ease, transform .3s ease, visibility .3s",
+        }}>
+        <button onClick={() => { cancelarAuto(); setAbierto(false); }} className="cf-btn" style={{ position: "absolute", top: 10, right: 10, background: "transparent", border: "none", color: C.marronSoft }}><X size={16} /></button>
+        <div style={{ fontWeight: 700, fontSize: 15, color: C.texto }}>¿Necesitas ayuda?</div>
+        <div style={{ fontSize: 13, color: C.marronSoft, margin: "4px 0 12px" }}>Chatea con nosotros</div>
+        <a href={link} target="_blank" rel="noreferrer" tabIndex={abierto ? 0 : -1} onClick={cancelarAuto} className="cf-btn"
+          style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: C.wapp, color: "#fff", textDecoration: "none", padding: "10px", borderRadius: 10, fontSize: 14, fontWeight: 600 }}>
+          <MessageCircle size={17} /> Abrir WhatsApp
+        </a>
+      </div>
+      <button onClick={() => { cancelarAuto(); setAbierto((v) => !v); }} className="cf-btn" title="WhatsApp"
         style={{ position: "fixed", right: 20, bottom: 20, width: 56, height: 56, borderRadius: "50%", background: C.wapp, color: "#fff", border: "none", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 6px 20px rgba(0,0,0,.25)", zIndex: 60 }}>
         <MessageCircle size={28} />
       </button>
