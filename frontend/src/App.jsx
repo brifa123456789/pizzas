@@ -46,10 +46,43 @@ function badgeInfo(it) {
   return null;
 }
 
-// Fotos de un producto (array). Compatibilidad con `image` suelto.
+/* --- Encuadre de las fotos (se regula desde el admin) ---
+   Cada foto guarda cuanto se acerca (zoom) y que punto de la foto se ve (x, y).
+   Por defecto: foto entera, centrada. */
+const ENCUADRE_DEF = { zoom: 1, x: 50, y: 50 };
+const ZOOM_MIN = 1, ZOOM_MAX = 3;
+const entre = (n, min, max) => Math.min(max, Math.max(min, n));
+const aNum = (v, def) => (isFinite(parseFloat(v)) ? parseFloat(v) : def);
+
+// Normaliza una foto a { src, zoom, x, y }. Acepta el formato viejo (data URL suelto).
+function normFoto(f) {
+  if (typeof f === "string") return f ? { src: f, ...ENCUADRE_DEF } : null;
+  if (f && typeof f.src === "string" && f.src) {
+    return {
+      src: f.src,
+      zoom: entre(aNum(f.zoom, 1), ZOOM_MIN, ZOOM_MAX),
+      x: entre(aNum(f.x, 50), 0, 100),
+      y: entre(aNum(f.y, 50), 0, 100),
+    };
+  }
+  return null;
+}
+
+// Fotos de un producto, ya normalizadas. Compatibilidad con `image` suelto.
 function fotosDe(it) {
-  if (Array.isArray(it.images) && it.images.length) return it.images;
-  return it.image ? [it.image] : [];
+  const arr = Array.isArray(it.images) && it.images.length ? it.images : it.image ? [it.image] : [];
+  return arr.map(normFoto).filter(Boolean);
+}
+
+// Estilo del <img> que aplica el encuadre elegido en el admin.
+// El zoom se hace desde el mismo punto que se eligio mostrar, asi lo que ves es lo que se acerca.
+function estiloFoto(f, ajuste = "cover") {
+  return {
+    width: "100%", height: "100%", objectFit: ajuste,
+    objectPosition: `${f.x}% ${f.y}%`,
+    transform: f.zoom !== 1 ? `scale(${f.zoom})` : undefined,
+    transformOrigin: `${f.x}% ${f.y}%`,
+  };
 }
 
 // Precios por tamaño de un producto (array [{name, price}])
@@ -402,8 +435,8 @@ function SitioPublico({ onAdmin }) {
           <FootItem icon={<Clock size={16} />} label="Horario" val={site.horario} />
         </div>
         <div style={{ maxWidth: 1100, margin: "24px auto 0", paddingTop: 16, borderTop: "1px solid rgba(252,247,240,.14)", display: "flex", flexDirection: "column", alignItems: "center", gap: 13, textAlign: "center" }}>
-          <span style={{ color: "rgba(252,247,240,.4)", fontSize: 12 }}>© {new Date().getFullYear()} {site.nombre} · Todos los derechos reservados</span>
           <CreditoPixela />
+          <span style={{ color: "rgba(252,247,240,.4)", fontSize: 12 }}>© {new Date().getFullYear()} {site.nombre} · Todos los derechos reservados</span>
         </div>
       </footer>
 
@@ -490,7 +523,7 @@ function TarjetaProducto({ it, onVer, onAgregar, abierto = true }) {
       style={{ background: C.cremaSoft, borderRadius: 16, overflow: "hidden", border: `1px solid ${C.borde}`, cursor: "pointer", display: "flex", gap: 14, padding: 12 }}>
       <div style={{ width: 104, height: 104, flexShrink: 0, borderRadius: 12, overflow: "hidden", background: C.crema, display: "flex", alignItems: "center", justifyContent: "center" }}>
         {fotos[0] ? (
-          <img src={fotos[0]} alt={it.name} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }} />
+          <img src={fotos[0].src} alt={it.name} loading="lazy" style={estiloFoto(fotos[0])} />
         ) : (
           <ImageIcon size={34} color={C.borde} />
         )}
@@ -646,9 +679,9 @@ function ProductoModal({ it, cats, onCerrar, onAgregar, abierto = true }) {
       <div onClick={(e) => e.stopPropagation()} style={{ background: C.cremaSoft, borderRadius: 18, width: "100%", maxWidth: 820, maxHeight: "92vh", overflowY: "auto", boxShadow: "0 24px 70px rgba(0,0,0,.35)", display: "flex", flexDirection: "column" }}>
         <div style={{ display: "flex", flexWrap: "wrap" }}>
           {/* Carrusel */}
-          <div className="cf-modal-carrusel" style={{ position: "relative", flex: "1 1 340px", minHeight: 320, background: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div className="cf-modal-carrusel" style={{ position: "relative", flex: "1 1 340px", minHeight: 320, background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
             {fotos[i] ? (
-              <img className="cf-modal-img" src={fotos[i]} alt={it.name} style={{ width: "100%", height: "100%", maxHeight: 460, objectFit: "contain" }} />
+              <img className="cf-modal-img" src={fotos[i].src} alt={it.name} style={{ ...estiloFoto(fotos[i], "contain"), maxHeight: 460 }} />
             ) : (
               <ImageIcon size={64} color={C.borde} />
             )}
@@ -1225,7 +1258,8 @@ function AdminCatalogo() {
           <tbody>
             {filtrados.map((it) => {
               const cat = catById(cats, it.cat);
-              const nFotos = fotosDe(it).length;
+              const fotosIt = fotosDe(it);
+              const nFotos = fotosIt.length;
               const idx = items.findIndex((x) => x.id === it.id);
               return (
                 <tr key={it.id} style={{ borderTop: `1px solid ${C.crema}` }}>
@@ -1242,8 +1276,10 @@ function AdminCatalogo() {
                   <td style={{ padding: "12px 16px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                       <div style={{ position: "relative" }}>
-                        {it.image ? (
-                          <img src={it.image} alt="" style={{ width: 38, height: 38, objectFit: "cover", borderRadius: 8, border: `1px solid ${C.borde}` }} />
+                        {fotosIt[0] ? (
+                          <div style={{ width: 38, height: 38, borderRadius: 8, overflow: "hidden", border: `1px solid ${C.borde}` }}>
+                            <img src={fotosIt[0].src} alt="" style={estiloFoto(fotosIt[0])} />
+                          </div>
                         ) : (
                           <div title="Sin foto" style={{ width: 38, height: 38, borderRadius: 8, border: `1px dashed ${C.borde}`, display: "flex", alignItems: "center", justifyContent: "center", color: C.borde }}><ImageIcon size={16} /></div>
                         )}
@@ -1315,11 +1351,17 @@ function comprimirImagen(file, maxLado = 640) {
   });
 }
 
-/* Selector de VARIAS fotos por producto */
+/* Selector de VARIAS fotos por producto + ENCUADRE (zoom y posicion) de cada foto */
 function SelectorImagenes({ value, onChange, max = 8 }) {
   const inputRef = useRef(null);
+  const cajaRef = useRef(null);
+  const arrastre = useRef(null);
   const [procesando, setProcesando] = useState(false);
-  const fotos = Array.isArray(value) ? value : [];
+  const [sel, setSel] = useState(0);           // foto que se esta encuadrando
+
+  const fotos = (Array.isArray(value) ? value : []).map(normFoto).filter(Boolean);
+  const i0 = fotos.length ? entre(sel, 0, fotos.length - 1) : 0;
+  const actual = fotos[i0];
 
   const elegir = async (e) => {
     const files = Array.from(e.target.files || []);
@@ -1329,8 +1371,9 @@ function SelectorImagenes({ value, onChange, max = 8 }) {
     try {
       const libres = Math.max(0, max - fotos.length);
       const nuevas = [];
-      for (const f of files.slice(0, libres)) nuevas.push(await comprimirImagen(f));
+      for (const f of files.slice(0, libres)) nuevas.push({ src: await comprimirImagen(f), ...ENCUADRE_DEF });
       onChange([...fotos, ...nuevas]);
+      setSel(fotos.length);                    // queda seleccionada la primera foto nueva
       if (files.length > libres) window.alert(`Maximo ${max} fotos por producto.`);
     } catch (err) { window.alert(err.message); } finally { setProcesando(false); }
   };
@@ -1341,19 +1384,45 @@ function SelectorImagenes({ value, onChange, max = 8 }) {
     const copia = [...fotos];
     [copia[i], copia[j]] = [copia[j], copia[i]];
     onChange(copia);
+    setSel(j);
+  };
+
+  // ─── Encuadre de la foto seleccionada ───
+  const setEncuadre = (patch) => onChange(fotos.map((f, k) => (k === i0 ? { ...f, ...patch } : f)));
+  const correr = (dx, dy) => setEncuadre({ x: entre(actual.x + dx, 0, 100), y: entre(actual.y + dy, 0, 100) });
+
+  // Arrastrar sobre la vista previa mueve la foto dentro del recuadro
+  const alBajar = (e) => {
+    if (!actual || !cajaRef.current) return;
+    const r = cajaRef.current.getBoundingClientRect();
+    arrastre.current = { px: e.clientX, py: e.clientY, w: r.width, h: r.height, x: actual.x, y: actual.y };
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
+  };
+  const alMover = (e) => {
+    const a = arrastre.current;
+    if (!a) return;
+    setEncuadre({
+      x: Math.round(entre(a.x - ((e.clientX - a.px) / a.w) * 100, 0, 100)),
+      y: Math.round(entre(a.y - ((e.clientY - a.py) / a.h) * 100, 0, 100)),
+    });
+  };
+  const alSoltar = (e) => {
+    arrastre.current = null;
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {}
   };
 
   return (
     <div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 10 }}>
-        {fotos.map((src, i) => (
-          <div key={i} style={{ position: "relative", width: 72, height: 72, borderRadius: 10, overflow: "hidden", border: `1px solid ${C.borde}` }}>
-            <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        {fotos.map((f, i) => (
+          <div key={i} onClick={() => setSel(i)} title="Click para encuadrar esta foto"
+            style={{ position: "relative", width: 72, height: 72, borderRadius: 10, overflow: "hidden", cursor: "pointer", border: `2px solid ${i === i0 ? C.terra : C.borde}` }}>
+            <img src={f.src} alt="" draggable={false} style={estiloFoto(f)} />
             {i === 0 && <span style={{ position: "absolute", top: 2, left: 2, background: C.terra, color: "#fff", fontSize: 8, fontWeight: 700, padding: "1px 4px", borderRadius: 5 }}>PORTADA</span>}
-            <button type="button" onClick={() => quitar(i)} className="cf-btn" style={{ position: "absolute", top: 2, right: 2, background: "rgba(198,85,63,.92)", border: "none", color: "#fff", borderRadius: "50%", width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center" }}><X size={11} /></button>
+            <button type="button" onClick={(e) => { e.stopPropagation(); quitar(i); }} className="cf-btn" style={{ position: "absolute", top: 2, right: 2, background: "rgba(198,85,63,.92)", border: "none", color: "#fff", borderRadius: "50%", width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center" }}><X size={11} /></button>
             <div style={{ position: "absolute", bottom: 2, left: 2, display: "flex", gap: 2 }}>
-              <button type="button" onClick={() => mover(i, -1)} className="cf-btn" style={miniMov} title="Mover antes"><ChevronLeft size={11} /></button>
-              <button type="button" onClick={() => mover(i, 1)} className="cf-btn" style={miniMov} title="Mover despues"><ChevronRight size={11} /></button>
+              <button type="button" onClick={(e) => { e.stopPropagation(); mover(i, -1); }} className="cf-btn" style={miniMov} title="Mover antes"><ChevronLeft size={11} /></button>
+              <button type="button" onClick={(e) => { e.stopPropagation(); mover(i, 1); }} className="cf-btn" style={miniMov} title="Mover despues"><ChevronRight size={11} /></button>
             </div>
           </div>
         ))}
@@ -1366,10 +1435,66 @@ function SelectorImagenes({ value, onChange, max = 8 }) {
         )}
       </div>
       <div style={{ fontSize: 11, color: C.marronSoft }}>Podes subir hasta {max} fotos · la primera es la portada · JPG, PNG o WebP</div>
+
+      {/* ─── Encuadre: zoom y posicion de la foto seleccionada ─── */}
+      {actual && (
+        <div style={{ marginTop: 14, padding: 14, borderRadius: 12, background: C.crema, border: `1px solid ${C.borde}` }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.texto, marginBottom: 2, display: "flex", alignItems: "center", gap: 6 }}>
+            <Ruler size={13} color={C.terra} /> Encuadre de la foto {i0 + 1} de {fotos.length}
+          </div>
+          <div style={{ fontSize: 11, color: C.marronSoft, marginBottom: 12 }}>
+            Arrastra la foto para moverla y usa el zoom para acercarla. Se guarda junto con el producto.
+          </div>
+
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "flex-start" }}>
+            {/* Vista previa: como se ve en la tarjeta del catalogo */}
+            <div>
+              <div ref={cajaRef} onPointerDown={alBajar} onPointerMove={alMover} onPointerUp={alSoltar} onPointerCancel={alSoltar}
+                style={{ width: 128, height: 128, borderRadius: 12, overflow: "hidden", background: "#fff", border: `1px solid ${C.borde}`, cursor: "grab", touchAction: "none", userSelect: "none" }}>
+                <img src={actual.src} alt="" draggable={false} style={estiloFoto(actual)} />
+              </div>
+              <div style={{ fontSize: 10, color: C.marronSoft, textAlign: "center", marginTop: 4 }}>En la tarjeta</div>
+            </div>
+
+            {/* Vista previa: como se ve en el detalle (foto completa) */}
+            <div>
+              <div style={{ width: 128, height: 128, borderRadius: 12, overflow: "hidden", background: "#fff", border: `1px solid ${C.borde}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <img src={actual.src} alt="" draggable={false} style={estiloFoto(actual, "contain")} />
+              </div>
+              <div style={{ fontSize: 10, color: C.marronSoft, textAlign: "center", marginTop: 4 }}>En el detalle</div>
+            </div>
+
+            {/* Controles */}
+            <div style={{ flex: "1 1 190px", minWidth: 175 }}>
+              <label style={{ display: "flex", justifyContent: "space-between", fontSize: 11, fontWeight: 600, color: C.texto, marginBottom: 5 }}>
+                <span>Zoom</span><span style={{ color: C.terra }}>{Math.round(actual.zoom * 100)}%</span>
+              </label>
+              <input type="range" min={ZOOM_MIN * 100} max={ZOOM_MAX * 100} step={5} value={Math.round(actual.zoom * 100)}
+                onChange={(e) => setEncuadre({ zoom: parseInt(e.target.value, 10) / 100 })}
+                style={{ width: "100%", accentColor: C.terra, cursor: "pointer" }} />
+
+              <div style={{ fontSize: 11, fontWeight: 600, color: C.texto, margin: "12px 0 5px" }}>Posicion</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 30px)", gridAutoRows: 30, gap: 3 }}>
+                <span />
+                <button type="button" onClick={() => correr(0, -5)} className="cf-btn" style={btnPos} title="Subir"><ChevronUp size={14} /></button>
+                <span />
+                <button type="button" onClick={() => correr(-5, 0)} className="cf-btn" style={btnPos} title="Izquierda"><ChevronLeft size={14} /></button>
+                <button type="button" onClick={() => setEncuadre({ ...ENCUADRE_DEF })} className="cf-btn" style={{ ...btnPos, fontSize: 8.5, fontWeight: 700, color: C.terra }} title="Restablecer el encuadre">RESET</button>
+                <button type="button" onClick={() => correr(5, 0)} className="cf-btn" style={btnPos} title="Derecha"><ChevronRight size={14} /></button>
+                <span />
+                <button type="button" onClick={() => correr(0, 5)} className="cf-btn" style={btnPos} title="Bajar"><ChevronDown size={14} /></button>
+                <span />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={elegir} style={{ display: "none" }} />
     </div>
   );
 }
+const btnPos = { background: "#fff", border: `1px solid ${C.borde}`, borderRadius: 7, color: C.marron, display: "flex", alignItems: "center", justifyContent: "center", padding: 0, cursor: "pointer" };
 const miniMov = { background: "rgba(255,255,255,.9)", border: "none", color: C.marron, borderRadius: 4, width: 18, height: 16, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 };
 
 const limpiarPrecio = (v) => v.replace(/[^\d.,]/g, "");

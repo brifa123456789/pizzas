@@ -4,16 +4,37 @@ import { requiereAuth } from "../middleware/auth.js";
 
 const router = Router();
 
+// Encuadre de una foto: cuanto se acerca (zoom) y que punto de la foto se ve (x, y).
+// Lo elige el admin desde el panel; por defecto la foto va entera y centrada.
+const ENCUADRE_DEF = { zoom: 1, x: 50, y: 50 };
+const entre = (n, min, max) => Math.min(max, Math.max(min, n));
+const aNum = (v, def) => (isFinite(parseFloat(v)) ? parseFloat(v) : def);
+
+// Normaliza una foto a { src, zoom, x, y }.
+// Acepta el formato viejo (solo el data URL suelto) por compatibilidad.
+function normFoto(f) {
+  if (typeof f === "string") return f ? { src: f, ...ENCUADRE_DEF } : null;
+  if (f && typeof f.src === "string" && f.src) {
+    return {
+      src: f.src,
+      zoom: entre(aNum(f.zoom, 1), 1, 3),
+      x: entre(aNum(f.x, 50), 0, 100),
+      y: entre(aNum(f.y, 50), 0, 100),
+    };
+  }
+  return null;
+}
+
 // Lee las imagenes de una fila: nueva columna `images` (JSON array),
 // con fallback a la columna vieja `image` (una sola) por compatibilidad.
 function parseImages(row) {
   if (row.images) {
     try {
       const arr = JSON.parse(row.images);
-      if (Array.isArray(arr)) return arr.filter(Boolean);
+      if (Array.isArray(arr)) return arr.map(normFoto).filter(Boolean);
     } catch {}
   }
-  return row.image ? [row.image] : [];
+  return row.image ? [{ src: row.image, ...ENCUADRE_DEF }] : [];
 }
 
 // Lee los precios por tamaño: columna `size_prices` (JSON [{name, price}])
@@ -56,19 +77,21 @@ function mapItem(row) {
     badge: row.badge || "",
     badgeLabel: row.badge_label || "",
     visible: !!row.visible,
-    image: imgs[0] || "",   // miniatura (primera foto)
-    images: imgs,           // todas las fotos
+    image: imgs[0]?.src || "",   // miniatura (primera foto)
+    images: imgs,                // todas las fotos, con su encuadre
   };
 }
 
-// Cada foto llega como data URL ya comprimida por el frontend (~30-100 KB)
+// Cada foto llega como data URL ya comprimida por el frontend (~30-100 KB),
+// suelta (formato viejo) o dentro de { src, zoom, x, y } (con encuadre).
 function imagenesInvalidas(images) {
   if (images == null) return false;         // no enviar fotos es valido
   if (!Array.isArray(images)) return true;
   if (images.length > 8) return true;       // maximo 8 fotos por producto
-  return images.some(
-    (img) => typeof img !== "string" || !img.startsWith("data:image/") || img.length > 1_500_000
-  );
+  return images.some((img) => {
+    const src = typeof img === "string" ? img : img && img.src;
+    return typeof src !== "string" || !src.startsWith("data:image/") || src.length > 1_500_000;
+  });
 }
 
 // Normaliza el badge a uno de los valores permitidos
@@ -76,10 +99,10 @@ function limpiarBadge(b) {
   return b === "new" || b === "sale" ? b : "";
 }
 
-// Prepara los valores de imagen para guardar: JSON del array + primera foto
+// Prepara los valores de imagen para guardar: JSON del array (con encuadre) + primera foto
 function valoresImagen(images) {
-  const arr = Array.isArray(images) ? images.filter(Boolean) : [];
-  return { json: arr.length ? JSON.stringify(arr) : null, primera: arr[0] || null };
+  const arr = (Array.isArray(images) ? images : []).map(normFoto).filter(Boolean);
+  return { json: arr.length ? JSON.stringify(arr) : null, primera: arr[0]?.src || null };
 }
 
 // ─── PUBLICO: solo productos visibles ──────────────────
